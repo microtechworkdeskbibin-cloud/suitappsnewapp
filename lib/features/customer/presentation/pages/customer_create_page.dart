@@ -71,6 +71,14 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
   String? _rateType;
   String? _customerCategory;
 
+  // Account type:
+  // Customer    -> IfDistributor = 0 and distributor must be selected.
+  // Distributor -> IfDistributor = 1 and no distributor is selected.
+  String? _accountType;
+  int? _selectedDistributorId;
+  List<CustomerModel> _distributors = [];
+  bool _loadingDistributors = false;
+
   File? _selectedImage;
   final List<File> _additionalImages = [];
   final _picker = ImagePicker();
@@ -92,6 +100,24 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _fadeCtrl.forward();
+    _loadDistributors();
+  }
+
+  Future<void> _loadDistributors() async {
+    setState(() => _loadingDistributors = true);
+    try {
+      final distributors = await CustomerService().getDistributors();
+      if (!mounted) return;
+      setState(() {
+        _distributors = distributors;
+      });
+    } catch (e) {
+      debugPrint('LOAD DISTRIBUTORS ERROR: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingDistributors = false);
+      }
+    }
   }
 
   @override
@@ -243,6 +269,13 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
         setState(() => _isSaving = false);
         return;
       }
+      // Customer must have an existing distributor.
+      if (_accountType == 'Customer' && _selectedDistributorId == null) {
+        _showSnack('Please select a distributor.', isError: true);
+        setState(() => _isSaving = false);
+        return;
+      }
+
       final customer = CustomerModel(
         gstinNo: _gstinCtrl.text.trim().toUpperCase(),
         customerName: _nameCtrl.text.trim(),
@@ -261,6 +294,9 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
         creditDays: _creditDaysCtrl.text.trim(),
         imagePath: _selectedImage?.path ?? '',
         additionalImages: _additionalImages.map((e) => e.path).toList(),
+        ifDistributor: _accountType == 'Distributor' ? 1 : 0,
+        distribtrWiseCustId:
+            _accountType == 'Customer' ? _selectedDistributorId : null,
       );
       final id = await CustomerService().insertCustomer(customer);
       debugPrint('Customer saved with ID: $id');
@@ -742,6 +778,37 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
             validator: _validateAddress,
           ),
           _gap(),
+
+          // Customer / Distributor selection
+          _dropdown(
+            labelText: 'Account Type',
+            value: _accountType,
+            items: const ['Customer', 'Distributor'],
+            isRequired: true,
+            prefixIcon: const Icon(
+              Icons.business_center_outlined,
+              size: 18,
+              color: textSecondary,
+            ),
+            validator: (v) => _required(v, 'Account Type'),
+            onChanged: (v) {
+              setState(() {
+                _accountType = v;
+                // A distributor cannot belong to another distributor.
+                if (v == 'Distributor') {
+                  _selectedDistributorId = null;
+                }
+              });
+            },
+          ),
+
+          // Show distributor only for normal customers.
+          if (_accountType == 'Customer') ...[
+            _gap(),
+            _buildDistributorDropdown(),
+          ],
+
+          _gap(),
           _dropdown(
             labelText: 'Type',
             value: _customerType,
@@ -782,6 +849,81 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
   }
 
   // â”€â”€â”€ Contact Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  Widget _buildDistributorDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label('Distributor', required: true),
+        DropdownButtonFormField<int>(
+          initialValue: _selectedDistributorId,
+          decoration: _inputDec(
+            '',
+            prefixIcon: const Icon(
+              Icons.local_shipping_outlined,
+              size: 18,
+              color: textSecondary,
+            ),
+          ),
+          autovalidateMode: _autoValidate
+              ? AutovalidateMode.always
+              : AutovalidateMode.disabled,
+          validator: (value) {
+            if (_accountType == 'Customer' && value == null) {
+              return 'Distributor is required';
+            }
+            return null;
+          },
+          isExpanded: true,
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: textSecondary,
+            size: 20,
+          ),
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: textPrimary,
+          ),
+          dropdownColor: cardBg,
+          borderRadius: BorderRadius.circular(radiusCard),
+          hint: Text(
+            _loadingDistributors
+                ? 'Loading distributors...'
+                : _distributors.isEmpty
+                    ? 'No distributors found'
+                    : 'Select distributor',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          items: _distributors
+              .map(
+                (distributor) => DropdownMenuItem<int>(
+                  value: distributor.id,
+                  child: Text(
+                    '${distributor.customerName} (ID: ${distributor.id})',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: _loadingDistributors || _distributors.isEmpty
+              ? null
+              : (value) {
+                  setState(() => _selectedDistributorId = value);
+                },
+        ),
+      ],
+    );
+  }
+
   Widget _buildContactCard() {
     return _card(
       child: Column(
@@ -1053,22 +1195,24 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
                   strokeWidth: 2.5,
                 ),
               )
-            : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.save_rounded, size: 18),
-                  SizedBox(width: sm),
-                  Text(
-                    'Save Customer',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
-              ),
+: Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      const Icon(Icons.save_rounded, size: 18),
+      const SizedBox(width: sm),
+      Text(
+        _accountType == 'Distributor'
+            ? 'Save Distributor'
+            : 'Save Customer',
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+          letterSpacing: 0.2,
+        ),
+      ),
+    ],
+  ),
       ),
     );
   }

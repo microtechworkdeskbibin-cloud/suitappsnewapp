@@ -1,12 +1,7 @@
-/// Mirrors the structure of Tables.java from the native Android app —
-/// one static "table" class per entity, holding TABLE_NAME and
-/// COLUMN_NAME_* constants. Keeping these in one place means the
-/// column names used by CustomerModel / CustomerService always match
-/// what's referenced elsewhere (queries, migrations, etc.).
+/// Database table and column names used by the customer feature.
 class Tables {
-  Tables._(); // not meant to be instantiated
+  Tables._();
 
-  //region Customer
   static const String CUSTOMER_TABLE_NAME = 'CustomerTable';
 
   static const String KEY_CustomerID = 'CustomerId';
@@ -29,5 +24,9 @@ class Tables {
   static const String COLUMN_NAME_ADDITIONALIMAGES = 'AdditionalImages';
   static const String COLUMN_NAME_COMPANY_ID = 'CompanyId';
   static const String COLUMN_NAME_Date = 'Date';
-  //endregion
+
+  // Distributor relationship
+  static const String COLUMN_NAME_IF_DISTRIBUTOR = 'IfDistributor';
+  static const String COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID =
+      'DistribtrWiseCustId';
 }

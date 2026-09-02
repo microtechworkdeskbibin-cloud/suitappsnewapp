@@ -7,7 +7,7 @@ class CustomerModel {
   final String customerName;
   final String address;
   final String type;
-  final String customerType; // category (Retail/Wholesale)
+  final String customerType;
   final String rateType;
   final String email;
   final String mobile;
@@ -22,6 +22,13 @@ class CustomerModel {
   final List<String> additionalImages;
   final String? companyId;
   final String? date;
+
+  // 1 = Distributor, 0 = Customer
+  final int ifDistributor;
+
+  // For a Customer, this stores the selected Distributor's CustomerId.
+  // For a Distributor this remains null.
+  final int? distribtrWiseCustId;
 
   CustomerModel({
     this.id,
@@ -44,11 +51,10 @@ class CustomerModel {
     required this.additionalImages,
     this.companyId,
     this.date,
+    this.ifDistributor = 0,
+    this.distribtrWiseCustId,
   });
 
-  /// Converts this model into a Map keyed by the exact column names
-  /// declared in Tables.CustomerTable, so it lines up with the schema
-  /// used on the Android/Java side.
   Map<String, dynamic> toMap() {
     return {
       if (id != null) Tables.KEY_CustomerID: id,
@@ -71,16 +77,19 @@ class CustomerModel {
       Tables.COLUMN_NAME_ADDITIONALIMAGES: jsonEncode(additionalImages),
       Tables.COLUMN_NAME_COMPANY_ID: companyId ?? '',
       Tables.COLUMN_NAME_Date: date ?? DateTime.now().toIso8601String(),
+      Tables.COLUMN_NAME_IF_DISTRIBUTOR: ifDistributor,
+      Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID: distribtrWiseCustId,
     };
   }
 
-  /// Builds a model back from a sqflite row map (column-name keyed).
   factory CustomerModel.fromMap(Map<String, dynamic> map) {
     List<String> images = [];
     final raw = map[Tables.COLUMN_NAME_ADDITIONALIMAGES];
+
     if (raw != null && raw.toString().isNotEmpty) {
       try {
-        images = List<String>.from(jsonDecode(raw as String) as List);
+        final decoded = raw is String ? jsonDecode(raw) : raw;
+        images = List<String>.from(decoded as List);
       } catch (_) {
         images = [];
       }
@@ -108,10 +117,23 @@ class CustomerModel {
       additionalImages: images,
       companyId: map[Tables.COLUMN_NAME_COMPANY_ID]?.toString(),
       date: map[Tables.COLUMN_NAME_Date]?.toString(),
+      ifDistributor:
+          int.tryParse(map[Tables.COLUMN_NAME_IF_DISTRIBUTOR]?.toString() ?? '') ??
+              0,
+      distribtrWiseCustId:
+          map[Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID] == null
+              ? null
+              : int.tryParse(
+                  map[Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID].toString(),
+                ),
     );
   }
 
-  CustomerModel copyWith({int? id}) {
+  CustomerModel copyWith({
+    int? id,
+    int? ifDistributor,
+    int? distribtrWiseCustId,
+  }) {
     return CustomerModel(
       id: id ?? this.id,
       gstinNo: gstinNo,
@@ -133,6 +155,9 @@ class CustomerModel {
       additionalImages: additionalImages,
       companyId: companyId,
       date: date,
+      ifDistributor: ifDistributor ?? this.ifDistributor,
+      distribtrWiseCustId:
+          distribtrWiseCustId ?? this.distribtrWiseCustId,
     );
   }
 }

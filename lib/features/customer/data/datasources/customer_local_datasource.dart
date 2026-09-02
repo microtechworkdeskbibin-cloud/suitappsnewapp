@@ -3,15 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:suitapps/core/database/tables.dart';
 import 'package:suitapps/features/customer/data/models/customer_model.dart';
 
-/// Handles all local (on-device) persistence for customers using sqflite.
-/// Column/table names are pulled from Tables.CustomerTable so this stays
-/// in sync with the same schema naming used on the Android/Java side.
-///
-/// Add these to pubspec.yaml if not already present:
-///   sqflite: ^2.3.0
-///   path: ^1.9.0
 class CustomerService {
-  // Singleton so the whole app shares one open DB connection.
   static final CustomerService _instance = CustomerService._internal();
   factory CustomerService() => _instance;
   CustomerService._internal();
@@ -30,9 +22,21 @@ class CustomerService {
 
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await _createCustomerTable(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute(
+            'ALTER TABLE ${Tables.CUSTOMER_TABLE_NAME} '
+            'ADD COLUMN ${Tables.COLUMN_NAME_IF_DISTRIBUTOR} INTEGER NOT NULL DEFAULT 0',
+          );
+          await db.execute(
+            'ALTER TABLE ${Tables.CUSTOMER_TABLE_NAME} '
+            'ADD COLUMN ${Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID} INTEGER',
+          );
+        }
       },
     );
   }
@@ -59,16 +63,26 @@ class CustomerService {
         ${Tables.COLUMN_NAME_IMAGEPATH} TEXT,
         ${Tables.COLUMN_NAME_ADDITIONALIMAGES} TEXT,
         ${Tables.COLUMN_NAME_COMPANY_ID} TEXT,
-        ${Tables.COLUMN_NAME_Date} TEXT
+        ${Tables.COLUMN_NAME_Date} TEXT,
+        ${Tables.COLUMN_NAME_IF_DISTRIBUTOR} INTEGER NOT NULL DEFAULT 0,
+        ${Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID} INTEGER
       )
     ''');
-    // Speeds up the duplicate-mobile-number lookup on save.
+
     await db.execute(
-      'CREATE INDEX idx_customer_mobile ON ${Tables.CUSTOMER_TABLE_NAME} (${Tables.COLUMN_NAME_MOBILE})',
+      'CREATE INDEX idx_customer_mobile ON '
+      '${Tables.CUSTOMER_TABLE_NAME} '
+      '(${Tables.COLUMN_NAME_MOBILE})',
+    );
+
+    await db.execute(
+      'CREATE INDEX idx_customer_distributor ON '
+      '${Tables.CUSTOMER_TABLE_NAME} '
+      '(${Tables.COLUMN_NAME_IF_DISTRIBUTOR}, '
+      '${Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID})',
     );
   }
 
-  /// Inserts a new customer and returns the generated row id.
   Future<int> insertCustomer(CustomerModel customer) async {
     final db = await database;
     return db.insert(
@@ -78,7 +92,6 @@ class CustomerService {
     );
   }
 
-  /// Updates an existing customer (requires customer.id to be set).
   Future<int> updateCustomer(CustomerModel customer) async {
     final db = await database;
     return db.update(
@@ -89,7 +102,6 @@ class CustomerService {
     );
   }
 
-  /// Deletes a customer by id.
   Future<int> deleteCustomer(int id) async {
     final db = await database;
     return db.delete(
@@ -99,7 +111,6 @@ class CustomerService {
     );
   }
 
-  /// Returns true if a customer already exists with this mobile number.
   Future<bool> customerExists(String mobile) async {
     final db = await database;
     final result = await db.query(
@@ -111,17 +122,27 @@ class CustomerService {
     return result.isNotEmpty;
   }
 
-  /// Fetches all customers, most recently added first.
+  /// Returns only rows created as distributors.
+  Future<List<CustomerModel>> getDistributors() async {
+    final db = await database;
+    final result = await db.query(
+      Tables.CUSTOMER_TABLE_NAME,
+      where: '${Tables.COLUMN_NAME_IF_DISTRIBUTOR} = ?',
+      whereArgs: [1],
+      orderBy: '${Tables.COLUMN_NAME_CUSTOMERNAME} COLLATE NOCASE ASC',
+    );
+    return result.map(CustomerModel.fromMap).toList();
+  }
+
   Future<List<CustomerModel>> getAllCustomers() async {
     final db = await database;
     final result = await db.query(
       Tables.CUSTOMER_TABLE_NAME,
       orderBy: '${Tables.KEY_CustomerID} DESC',
     );
-    return result.map((row) => CustomerModel.fromMap(row)).toList();
+    return result.map(CustomerModel.fromMap).toList();
   }
 
-  /// Fetches a single customer by id, or null if not found.
   Future<CustomerModel?> getCustomerById(int id) async {
     final db = await database;
     final result = await db.query(
@@ -134,17 +155,18 @@ class CustomerService {
     return CustomerModel.fromMap(result.first);
   }
 
-  /// Simple search across name, mobile, and GSTIN â€” handy for a customer list screen.
   Future<List<CustomerModel>> searchCustomers(String query) async {
     final db = await database;
     final like = '%$query%';
     final result = await db.query(
       Tables.CUSTOMER_TABLE_NAME,
       where:
-          '${Tables.COLUMN_NAME_CUSTOMERNAME} LIKE ? OR ${Tables.COLUMN_NAME_MOBILE} LIKE ? OR ${Tables.COLUMN_NAME_GSTIN} LIKE ?',
+          '${Tables.COLUMN_NAME_CUSTOMERNAME} LIKE ? OR '
+          '${Tables.COLUMN_NAME_MOBILE} LIKE ? OR '
+          '${Tables.COLUMN_NAME_GSTIN} LIKE ?',
       whereArgs: [like, like, like],
       orderBy: '${Tables.KEY_CustomerID} DESC',
     );
-    return result.map((row) => CustomerModel.fromMap(row)).toList();
+    return result.map(CustomerModel.fromMap).toList();
   }
 }
