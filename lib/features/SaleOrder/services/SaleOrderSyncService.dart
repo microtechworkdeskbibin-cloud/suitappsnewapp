@@ -9,7 +9,7 @@ import 'package:suitapps/core/database/database_helper.dart';
 //
 // Handles pushing locally-saved sale orders (from SaleOrderPage._saveOrder)
 // up to the online DB via the /syncSaleOrderApp endpoint (which internally
-// calls Sync_AliasDirectSales then Sync_AliasDirectSaleDetails per item â€”
+// calls Sync_AliasDirectSales then Sync_AliasDirectSaleDetails per item —
 // see syncSaleOrderApp.js).
 //
 // Same offline-first flow as ReceiptSyncService: save locally first
@@ -18,15 +18,27 @@ import 'package:suitapps/core/database/database_helper.dart';
 //
 // Two things baked in per team decision (see DatabaseHelper._createSaleOrderTables
 // comments for the full rationale):
-//   â€¢ ModifiedBy is ALWAYS sent as 0 â€” Sync_AliasDirectSales's insert-vs-
+//   • ModifiedBy is ALWAYS sent as 0 — Sync_AliasDirectSales's insert-vs-
 //     update check is `WHERE SuitApps_id=@SuitApps_id AND ModifiedBy=0`;
 //     any other value risks a duplicate INSERT on the next sync of the
 //     same order.
-//   â€¢ CGST/SGST are split evenly from the item's single combined tax
+//   • CGST/SGST are split evenly from the item's single combined tax
 //     amount (CGST = SGST = taxAmount / 2), since AliaseSalesDetails has
 //     no single "total tax" column, only the CGST/SGST pair (intra-state
-//     GST only â€” there's no IGST column in this schema for inter-state
+//     GST only — there's no IGST column in this schema for inter-state
 //     orders).
+//
+// CHANGE LOG (fixes applied):
+//   • `orderSeries` and `orderNumber` are now read as two SEPARATE local
+//     columns (see sale_order_page.dart / DatabaseHelper) instead of one
+//     combined "series-number" string. `OrderNo` below is now sent as the
+//     plain numeric order number. `orderSeries` is sent separately —
+//     confirm against Sync_AliasDirectSales which actual server-side
+//     parameter it should map to (this file guesses `AliasBillNo` isn't
+//     it; adjust once you check the stored procedure's parameter list).
+//   • 'Amount' is unaffected here — it was already forwarding
+//     row['amount'] as-is; the fix for that value lives in
+//     SaleOrderPage._saveOrder (amount now equals totalAmount).
 //
 // pubspec.yaml packages needed if not already present:
 //   http: ^1.2.0
@@ -67,7 +79,7 @@ class SaleOrderSyncService {
 
   /// Pulls every local order with isSynced = 0 and syncs them one at a
   /// time (unlike receipts/bills, an order's header+items sync is one
-  /// combined API call per order â€” see syncSaleOrderApp.js â€” so there's
+  /// combined API call per order — see syncSaleOrderApp.js — so there's
   /// no batch endpoint to send them all in a single request).
   Future<void> syncPendingOrders() async {
     if (_isSyncing) return;
@@ -103,29 +115,30 @@ class SaleOrderSyncService {
               .timeout(ApiConfig.receiveTimeout);
 
           if (response.statusCode != 200) {
-            print('âŒ Sale order sync failed for $suitAppsId: HTTP ${response.statusCode}');
+            print('❌ Sale order sync failed for $suitAppsId: HTTP ${response.statusCode}');
+            print('❌ Response body: ${response.body}');
             continue;
           }
 
           final decoded = jsonDecode(response.body);
           if (decoded['success'] != true) {
-            print('âŒ Sale order sync rejected for $suitAppsId: ${decoded['message']}');
+            print('❌ Sale order sync rejected for $suitAppsId: ${decoded['message']}');
             continue;
           }
 
           final serverOrderId = decoded['DSID']?.toString();
           if (serverOrderId == null) {
-            print('âš ï¸ Sale order $suitAppsId synced but no DSID returned â€” left unsynced.');
+            print('⚠️ Sale order $suitAppsId synced but no DSID returned — left unsynced.');
             continue;
           }
 
           await DatabaseHelper.instance.markSaleOrderSynced(suitAppsId, serverOrderId);
-          print('âœ… Sale order synced: $suitAppsId -> server DSID $serverOrderId '
+          print('✅ Sale order synced: $suitAppsId -> server DSID $serverOrderId '
               '(OrderNo: ${decoded['OrderNo']})');
         } catch (e) {
-          // Still offline / server unreachable â€” leave it for the next
+          // Still offline / server unreachable — leave it for the next
           // attempt rather than blocking the rest of the queue.
-          print('âŒ Sale order sync error for $suitAppsId (will retry later): $e');
+          print('❌ Sale order sync error for $suitAppsId (will retry later): $e');
           continue;
         }
       }
@@ -140,17 +153,28 @@ class SaleOrderSyncService {
     return {
       'DSID': int.tryParse(row['serverOrderId']?.toString() ?? '') ?? 0,
       'Date': row['orderDate'],
-      'OrderNo': row['orderNo'] ?? '',
+      // `orderNumber` is now the plain numeric order number, stored
+      // separately from `orderSeries` (previously both were pre-joined
+      // into a single "series-number" string here — e.g. "B2C-11").
+      // Server validates OrderNo as a string, so convert explicitly.
+      'OrderNo': row['orderNumber']?.toString() ?? '',
+      // TODO: confirm which parameter Sync_AliasDirectSales actually
+      // expects the series in (this schema comment set didn't include
+      // the stored proc signature). Sending it as `OrderSeries` as a
+      // best guess — rename to match once confirmed.
+      'OrderSeries': row['orderSeries'] ?? '',
       'CustomerID': int.tryParse(row['customerId']?.toString() ?? '') ?? 0,
       'UserID': row['userId'],
       'CompanyID': row['companyId'],
+      // Now the FINAL amount (tax included) — SaleOrderPage._saveOrder
+      // fixed this to equal totalAmount instead of the pre-tax subtotal.
       'Amount': row['amount'],
       'AdvanceAmo': row['advanceAmount'],
       'TotAmo': row['totalAmount'],
       'OrderStatus': row['orderStatus'],
       'CreatedBy': row['createdBy'],
       'CreatedDate': row['createdDate'],
-      // ModifiedBy is fixed at 0 here regardless of the local column â€”
+      // ModifiedBy is fixed at 0 here regardless of the local column —
       // see the file header comment for why.
       'ModifiedBy': 0,
       'ModifiedDate': DateTime.now().toIso8601String(),

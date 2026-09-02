@@ -6,14 +6,15 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:suitapps/features/direct_sale/presentation/pages/direct_sale_customer_page.dart';
 import 'package:suitapps/features/receipt/presentation/pages/customer_receipt_page.dart';
+import 'package:suitapps/features/SaleOrder/presentation/pages/SaleOrderPage.dart';
 import 'package:suitapps/core/config/api_config.dart';
 
 // TODO: update this import path to wherever your Direct Sale page actually lives.
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 // DESIGN SYSTEM
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 
 class AppColors {
   static const Color primary = Color.fromARGB(255, 35, 0, 196);
@@ -128,9 +129,9 @@ class AppLayout {
   static const double pageGap = 24;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 // DATA MODELS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 
 class MenuItemData {
   final IconData icon;
@@ -150,9 +151,9 @@ class DetailItemData {
   const DetailItemData(this.label, this.value, this.color);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 // CUSTOMER INFO PAGE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════
 
 class CustomerInfoPage extends StatefulWidget {
   final Map<String, dynamic> customer;
@@ -324,7 +325,7 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
   }
 
   String _formatCurrency(double value) {
-    return 'â‚¹${value.toStringAsFixed(2)}';
+    return '₹${value.toStringAsFixed(2)}';
   }
 
   String _extractChequeValue(List<Map<String, dynamic>> rows) {
@@ -369,7 +370,7 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
       }
     }
 
-    return 'â‚¹0.00';
+    return '₹0.00';
   }
 
   String _readStringValue(Map<String, dynamic> source, List<String> keys) {
@@ -476,7 +477,7 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
 
     final start = DateFormat('dd MMM yyyy').format(range.start);
     final end = DateFormat('dd MMM yyyy').format(range.end);
-    return '$start  â†’  $end';
+    return '$start  →  $end';
   }
 
   String _getActiveFilterLabel() {
@@ -500,6 +501,19 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
       context,
       MaterialPageRoute(
         builder: (context) => DirectSaleOfCustomer(customer: widget.customer),
+      ),
+    );
+  }
+
+  // Navigates to the Sale Order page ("Primary Order" tile), passing the
+  // current customer along the same way _openDirectSale does. SaleOrderPage
+  // opens in "create" mode (orderToEdit left null) since this is a brand
+  // new order for the customer, not an edit of an existing one.
+  void _openPrimaryOrder() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SaleOrderPage(customer: widget.customer),
       ),
     );
   }
@@ -748,30 +762,15 @@ void _openReceipt() {
     );
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─────────────────────────────────────────────────────────────
   // Quick Actions grid.
   // "Van Sales" is now the FIRST tile and, on tap, navigates
   // straight to the Direct Sale page (see _openDirectSale).
+  // "Primary Order" now navigates to the Sale Order page (see
+  // _openPrimaryOrder).
   // childAspectRatio was lowered from 0.85 -> 0.72 to fix the
   // "BOTTOM OVERFLOWED BY 7.0 PIXELS" error on these tiles.
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Widget _buildMenuGrid() {
-  //   final menuItems = [
-  //     MenuItemData(
-  //       Icons.delivery_dining_outlined,
-  //       'Van Sales',
-  //       AppColors.primary,
-  //       onTap: _openDirectSale,
-  //     ),
-  //     const MenuItemData(Icons.shopping_cart_outlined, 'Primary\nOrder', AppColors.primary),
-  //     const MenuItemData(Icons.local_shipping_outlined, 'Secondary\nSales', AppColors.secondary),
-  //     const MenuItemData(Icons.person_outline, 'Counter\nSales', AppColors.warning),
-  //     const MenuItemData(Icons.store_outlined, 'Outlets', AppColors.success),
-  //     const MenuItemData(Icons.analytics_outlined, 'Projection', AppColors.error),
-  //     const MenuItemData(Icons.inventory_2_outlined, 'GRN', AppColors.secondary),
-  //     const MenuItemData(Icons.shopping_bag_outlined, 'Stock\nUpload', AppColors.success),
-  //   ];
-
+  // ─────────────────────────────────────────────────────────────
   Widget _buildMenuGrid() {
   final menuItems = [
     MenuItemData(
@@ -780,7 +779,12 @@ void _openReceipt() {
       AppColors.primary,
       onTap: _openDirectSale,
     ),
-    const MenuItemData(Icons.shopping_cart_outlined, 'Primary\nOrder', AppColors.primary),
+    MenuItemData(
+      Icons.shopping_cart_outlined,
+      'Primary\nOrder',
+      AppColors.primary,
+      onTap: _openPrimaryOrder,
+    ),
     const MenuItemData(Icons.local_shipping_outlined, 'Secondary\nSales', AppColors.secondary),
     const MenuItemData(Icons.person_outline, 'Counter\nSales', AppColors.warning),
     const MenuItemData(Icons.store_outlined, 'Outlets', AppColors.success),
@@ -873,13 +877,13 @@ void _openReceipt() {
     );
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Date range card â€” fixed layout that never overflows.
+  // ─────────────────────────────────────────────────────────────
+  // Date range card — fixed layout that never overflows.
   // Title row and the date chip are stacked vertically, and
   // the chip's text is wrapped in Expanded + ellipsis so a
-  // long "dd MMM yyyy  â†’  dd MMM yyyy" string can never push
+  // long "dd MMM yyyy  →  dd MMM yyyy" string can never push
   // the row past the available width.
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─────────────────────────────────────────────────────────────
   Widget _buildDateCard() {
     return InkWell(
       onTap: _pickHistoryRange,
@@ -1039,11 +1043,11 @@ void _openReceipt() {
     );
   }
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─────────────────────────────────────────────────────────────
   // Expandable history card. Tapping the header toggles the
   // detail list open/closed with an animated chevron + size
   // transition instead of always rendering the detail rows.
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─────────────────────────────────────────────────────────────
   Widget _buildHistoryOptionCard({
     required String cardKey,
     required IconData icon,
@@ -1408,7 +1412,7 @@ class _CustomerDashboardData {
   final int billingReturnHistoryCount;
 
   const _CustomerDashboardData({
-    this.outstandingValue = 'â‚¹0.00',
+    this.outstandingValue = '₹0.00',
     this.chequesValue = '0',
     this.salesHistoryCount = 0,
     this.salesHistoryRows = const [],

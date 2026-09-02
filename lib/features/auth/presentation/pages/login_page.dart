@@ -468,30 +468,17 @@ class _LoginPageState extends State<LoginPage> {
       await prefs.setInt('VanID', (data['VanID'] ?? 0) as int);
       await prefs.setString('B2CSeries', (data['B2CSeries'] ?? '').toString());
       await prefs.setString('B2BSeries', (data['B2BSeries'] ?? '').toString());
-      await prefs.setString(
-        'B2CReturnSeries',
-        (data['B2CReturnSeries'] ?? '').toString(),
-      );
-      await prefs.setString(
-        'B2BReturnSeries',
-        (data['B2BReturnSeries'] ?? '').toString(),
-      );
-      await prefs.setInt(
-        'GreatestB2CBillNo',
-        (data['GreatestB2CBillNo'] ?? 0) as int,
-      );
-      await prefs.setInt(
-        'GreatestB2BBillNo',
-        (data['GreatestB2BBillNo'] ?? 0) as int,
-      );
-      await prefs.setInt(
-        'GreatestB2CReturnBillNo',
-        (data['GreatestB2CReturnBillNo'] ?? 0) as int,
-      );
-      await prefs.setInt(
-        'GreatestB2BReturnBillNo',
-        (data['GreatestB2BReturnBillNo'] ?? 0) as int,
-      );
+      await prefs.setString('B2CReturnSeries',(data['B2CReturnSeries'] ?? '').toString(),);
+      await prefs.setString('B2BReturnSeries',(data['B2BReturnSeries'] ?? '').toString(),);
+      await prefs.setInt('GreatestB2CBillNo',(data['GreatestB2CBillNo'] ?? 0) as int,);
+      await prefs.setInt('GreatestB2BBillNo',(data['GreatestB2BBillNo'] ?? 0) as int,);
+      await prefs.setInt('GreatestB2CReturnBillNo',(data['GreatestB2CReturnBillNo'] ?? 0) as int,);
+      await prefs.setInt('GreatestB2BReturnBillNo',(data['GreatestB2BReturnBillNo'] ?? 0) as int,);
+
+      await prefs.setString('B2COrderSeries', (data['B2COrderSeries'] ?? '').toString());
+      await prefs.setString('B2BOrderSeries', (data['B2BOrderSeries'] ?? '').toString());
+      await prefs.setInt('GreatestB2COrderBillNo',(data['GreatestB2COrderBillNo'] ?? 0) as int,);
+      await prefs.setInt('GreatestB2BOrderBillNo',(data['GreatestB2BOrderBillNo'] ?? 0) as int,);
 
       print('Allocation saved. VanID = ${data['VanID']}');
     } catch (e) {

@@ -23,7 +23,7 @@ class DatabaseHelper {
     // bump version when schema changes so existing DBs get upgraded
     return openDatabase(
       path,
-      version: 11,
+      version: 12,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE customers(
@@ -147,12 +147,30 @@ class DatabaseHelper {
 
         // v10 -> v11: add sale_orders & sale_order_items tables for
         // offline sale-order sync (see Sync_AliasDirectSales /
-        // Sync_AliasDirectSaleDetails â€” AliaseSales / AliaseSalesDetails
+        // Sync_AliasDirectSaleDetails — AliaseSales / AliaseSalesDetails
         // on the server). Orders are a separate flow from bills: an order
         // can later be converted into a bill, but is tracked independently
         // until then.
         if (oldVersion < 11) {
           await _createSaleOrderTables(db);
+        }
+
+        // v11 -> v12: sale_orders previously stored the order series and
+        // order number pre-joined into a single `orderNo` string (e.g.
+        // "B2C/SO/-1"), which made the two impossible to use separately
+        // downstream. SaleOrderPage now saves them as two distinct
+        // values — add the columns here so existing v11 installs (which
+        // already ran _createSaleOrderTables without them) don't hit
+        // "table sale_orders has no column named orderSeries" the next
+        // time an order is saved. `orderNo` is kept as-is for backward
+        // compatibility / display.
+        if (oldVersion < 12) {
+          try {
+            await db.execute('ALTER TABLE sale_orders ADD COLUMN orderSeries TEXT');
+          } catch (_) {}
+          try {
+            await db.execute('ALTER TABLE sale_orders ADD COLUMN orderNumber INTEGER');
+          } catch (_) {}
         }
       },
     );
@@ -248,7 +266,7 @@ class DatabaseHelper {
   // ------------------------------------------------------
   // Columns match every field written by insertLocalReceipt /
   // updateLocalReceipt below. 'accountCode' is the customer/party code
-  // (PartyID) each receipt belongs to â€” it's what CustomerRecepitPage
+  // (PartyID) each receipt belongs to — it's what CustomerRecepitPage
   // filters on to show one customer's receipts. 'accountName' and
   // 'customerAddress' are captured at save time so a receipt still shows
   // the right customer details even if the source customer record
@@ -296,33 +314,43 @@ class DatabaseHelper {
   // pattern as `receipts` vs InsertReceiptMob, `bills` vs
   // Sync_BillingApp2). A few notes on fields that don't map 1:1:
   //
-  //   â€¢ serverOrderId (local) <-> DSID (server) â€” DSID is the server's
+  //   • serverOrderId (local) <-> DSID (server) — DSID is the server's
   //     row id, filled in locally only once a sync succeeds, same as
   //     bills.serverBillId. `id` here is purely a local autoincrement key
   //     and is never sent to the server.
-  //   â€¢ orderNo â€” Sync_AliasDirectSales GENERATES this itself on insert
+  //   • orderSeries / orderNumber — added in schema v12. Previously the
+  //     app pre-joined these into a single `orderNo` string (e.g.
+  //     "B2C/SO/-1"), which made the series and the numeric part
+  //     impossible to use separately (sorting, filtering, sending to the
+  //     server as distinct fields, etc). SaleOrderPage now saves them as
+  //     two separate values: orderSeries (TEXT, e.g. "B2C") and
+  //     orderNumber (INTEGER, e.g. 11). `orderNo` is kept alongside as a
+  //     legacy combined display string for any screen that still expects
+  //     one field (e.g. bill printing) — drop it once nothing depends on
+  //     it.
+  //   • orderNo — Sync_AliasDirectSales GENERATES this itself on insert
   //     (see the proc: "@NO = COUNT(OrderNo)+1 ... @OrderNo=@UID+'-'+@NO")
   //     and does NOT return it via an OUT parameter. That means the app
   //     has no way to learn the server-assigned OrderNo from the sync
-  //     response alone â€” after a successful insert sync, a follow-up
+  //     response alone — after a successful insert sync, a follow-up
   //     lookup (e.g. SELECT OrderNo FROM AliaseSales WHERE DSID=@OutDSID)
   //     is needed to populate this column, or the proc needs an
-  //     additional @OutOrderNo OUTPUT param. Left as a TODO â€” orderNo
+  //     additional @OutOrderNo OUTPUT param. Left as a TODO — orderNo
   //     stays whatever the app previewed locally until that's resolved.
-  //   â€¢ modifiedBy â€” Sync_AliasDirectSales's insert-vs-update check is
+  //   • modifiedBy — Sync_AliasDirectSales's insert-vs-update check is
   //     `WHERE SuitApps_id=@SuitApps_id AND ModifiedBy=0`. Per team
   //     decision, the app ALWAYS sends ModifiedBy=0 on every sync call
   //     (create and edit alike) to avoid tripping this into the INSERT
-  //     branch again and creating a duplicate order â€” see
+  //     branch again and creating a duplicate order — see
   //     SaleOrderSyncService._toApiPayload.
-  //   â€¢ CGST/SGST â€” AliaseSalesDetails splits tax into CGST_Rate/CGST_Amt
+  //   • CGST/SGST — AliaseSalesDetails splits tax into CGST_Rate/CGST_Amt
   //     and SGST_Rate/SGST_Amt (intra-state GST), but BillItem/ProductData
   //     only carry a single combined tax %. Per team decision, this is
   //     split evenly (CGST = SGST = taxPercent / 2) when building the
-  //     sync payload â€” see SaleOrderSyncService. There's no IGST column
+  //     sync payload — see SaleOrderSyncService. There's no IGST column
   //     at all, so inter-state orders aren't representable in this schema
   //     as it stands.
-  //   â€¢ No UnitID column exists on AliaseSalesDetails (unlike
+  //   • No UnitID column exists on AliaseSalesDetails (unlike
   //     BillingDetails), so sale order items don't carry a unit id
   //     server-side, even though bill items do.
   Future<void> _createSaleOrderTables(Database db) async {
@@ -331,6 +359,8 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         suitAppsId TEXT UNIQUE,
         serverOrderId TEXT,
+        orderSeries TEXT,
+        orderNumber INTEGER,
         orderNo TEXT,
         orderDate TEXT,
         customerId TEXT,
