@@ -29,4 +29,20 @@ class Tables {
   static const String COLUMN_NAME_IF_DISTRIBUTOR = 'IfDistributor';
   static const String COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID =
       'DistribtrWiseCustId';
+
+  // NEW (schema v3) — offline-sync tracking, same role as
+  // sale_orders.suitAppsId/isSynced/serverOrderId in DatabaseHelper.
+  //   SuitAppsId          -> stable local id generated at insert time,
+  //                          independent of the autoincrement CustomerId.
+  //                          Sent to the server as SuitAppsId and used to
+  //                          correlate this row with the server's account
+  //                          after a successful sync (mirrors
+  //                          Accout.Customer_SuitAppsId server-side).
+  //   IsSynced            -> 0 until /InsertUpdateCustomer succeeds, then 1.
+  //   ServerAccountCode   -> the server's Accout.AccountCode, filled in
+  //                          once IsSynced = 1 (needed for any future
+  //                          UPDATE sync of this same customer).
+  static const String COLUMN_NAME_SUIT_APPS_ID = 'SuitAppsId';
+  static const String COLUMN_NAME_IS_SYNCED = 'IsSynced';
+  static const String COLUMN_NAME_SERVER_ACCOUNT_CODE = 'ServerAccountCode';
 }

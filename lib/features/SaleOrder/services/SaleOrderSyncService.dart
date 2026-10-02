@@ -39,6 +39,16 @@ import 'package:suitapps/core/database/database_helper.dart';
 //   • 'Amount' is unaffected here — it was already forwarding
 //     row['amount'] as-is; the fix for that value lives in
 //     SaleOrderPage._saveOrder (amount now equals totalAmount).
+//   • 'Status' (Primary vs Secondary — 1 = Primary, 0 = Secondary) is now
+//     forwarded from the local `sale_orders.status` column (schema v13,
+//     see DatabaseHelper). Previously this method never read `row['status']`
+//     at all, so the header payload sent to /syncSaleOrderApp had no
+//     `Status` key — the API route's `order.Status ?? 1` fallback then
+//     silently defaulted EVERY order to 1 server-side, regardless of
+//     whether it was actually saved locally as Primary or Secondary.
+//     This is a SEPARATE field from 'OrderStatus' below (the
+//     Pending/Confirmed/Dispatched/Cancelled lifecycle) — don't conflate
+//     the two.
 //
 // pubspec.yaml packages needed if not already present:
 //   http: ^1.2.0
@@ -172,6 +182,12 @@ class SaleOrderSyncService {
       'AdvanceAmo': row['advanceAmount'],
       'TotAmo': row['totalAmount'],
       'OrderStatus': row['orderStatus'],
+      // Primary vs Secondary order type — 1 = Primary, 0 = Secondary.
+      // Read from the local `sale_orders.status` column (see file header
+      // comment for why this was missing before). Falls back to 1 only
+      // if the column is somehow null (e.g. a pre-v13 row that hasn't
+      // been re-saved yet), matching the API route's own default.
+      'Status': row['status'] ?? 1,
       'CreatedBy': row['createdBy'],
       'CreatedDate': row['createdDate'],
       // ModifiedBy is fixed at 0 here regardless of the local column —

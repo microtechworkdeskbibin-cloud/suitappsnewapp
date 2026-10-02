@@ -5,15 +5,11 @@ class DsColors {
   static const Color primary = Color(0xFF0B6B4C);
   static const Color primaryDark = Color(0xFF0A5C41);
   static const Color primaryLight = Color(0xFFE3F3EC);
-
   static const Color background = Color(0xFFF4F6F8);
   static const Color cardBg = Color(0xFFFFFFFF);
-
   static const Color textPrimary = Color(0xFF1F2937);
   static const Color textSecondary = Color(0xFF6B7280);
-
   static const Color border = Color(0xFFE5E7EB);
-
   static const Color success = Color(0xFF16A34A);
   static const Color warning = Color(0xFFF59E0B);
   static const Color error = Color(0xFFDC2626);
@@ -76,4 +72,10 @@ class DsRadius {
   static const double button = 10;
   static const double chip = 20;
   static const double sheet = 20;
+}
+
+/// Common application constants
+class DsConstants {
+  /// Indian Rupee symbol
+  static const String currencySymbol = '\u20B9';
 }

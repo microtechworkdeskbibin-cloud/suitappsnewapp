@@ -505,15 +505,40 @@ class _CustomerInfoPageState extends State<CustomerInfoPage> {
     );
   }
 
+    void _openDirectSaleReturn() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DirectSaleOfCustomer(customer: widget.customer),
+      ),
+    );
+  }
+
   // Navigates to the Sale Order page ("Primary Order" tile), passing the
   // current customer along the same way _openDirectSale does. SaleOrderPage
   // opens in "create" mode (orderToEdit left null) since this is a brand
   // new order for the customer, not an edit of an existing one.
+  // isPrimary: true selects the Primary flow — the only difference vs
+  // _openSecondaryOrder is the `status` column SaleOrderPage saves
+  // (1 for primary, 0 for secondary); everything else about the page is
+  // identical.
   void _openPrimaryOrder() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => SaleOrderPage(customer: widget.customer),
+        builder: (context) => SaleOrderPage(customer: widget.customer, isPrimary: true),
+      ),
+    );
+  }
+
+  // Navigates to the same SaleOrderPage as _openPrimaryOrder, but with
+  // isPrimary: false so the saved order's `status` column is 0 instead
+  // of 1. Wired to the "Secondary\nSales" tile below.
+  void _openSecondaryOrder() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SaleOrderPage(customer: widget.customer, isPrimary: false),
       ),
     );
   }
@@ -543,6 +568,8 @@ void _openReceipt() {
     ),
   );
 }
+
+
 
 
   @override
@@ -766,8 +793,10 @@ void _openReceipt() {
   // Quick Actions grid.
   // "Van Sales" is now the FIRST tile and, on tap, navigates
   // straight to the Direct Sale page (see _openDirectSale).
-  // "Primary Order" now navigates to the Sale Order page (see
-  // _openPrimaryOrder).
+  // "Primary Order" now navigates to the Sale Order page in Primary
+  // mode (see _openPrimaryOrder); "Secondary Sales" navigates to the
+  // SAME Sale Order page in Secondary mode (see _openSecondaryOrder) —
+  // the two only differ in the `status` column SaleOrderPage saves.
   // childAspectRatio was lowered from 0.85 -> 0.72 to fix the
   // "BOTTOM OVERFLOWED BY 7.0 PIXELS" error on these tiles.
   // ─────────────────────────────────────────────────────────────
@@ -785,8 +814,20 @@ void _openReceipt() {
       AppColors.primary,
       onTap: _openPrimaryOrder,
     ),
-    const MenuItemData(Icons.local_shipping_outlined, 'Secondary\nSales', AppColors.secondary),
-    const MenuItemData(Icons.person_outline, 'Counter\nSales', AppColors.warning),
+    MenuItemData(
+      Icons.local_shipping_outlined,
+      'Secondary\nSales',
+      AppColors.secondary,
+      onTap: _openSecondaryOrder,
+    ),
+    // const MenuItemData(Icons.person_outline, 'Sales\nReturn', AppColors.warning),
+    MenuItemData(
+      Icons.receipt_long_outlined,
+      'Sales\nReturn',
+      AppColors.error,
+      onTap: _openDirectSaleReturn,
+    ),
+
     const MenuItemData(Icons.store_outlined, 'Outlets', AppColors.success),
     MenuItemData(
       Icons.receipt_long_outlined,

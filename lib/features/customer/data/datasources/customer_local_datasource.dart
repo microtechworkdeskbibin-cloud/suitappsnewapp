@@ -10,9 +10,16 @@ class CustomerService {
 
   static Database? _db;
 
+  // Guards against a race where two callers hit the `database` getter
+  // concurrently before `_db` is assigned — caching the in-flight Future
+  // ensures openDatabase (and its onUpgrade migrations) only ever
+  // actually runs once, no matter how many concurrent callers there are.
+  static Future<Database>? _initFuture;
+
   Future<Database> get database async {
     if (_db != null) return _db!;
-    _db = await _initDb();
+    _initFuture ??= _initDb();
+    _db = await _initFuture;
     return _db!;
   }
 
@@ -22,20 +29,51 @@ class CustomerService {
 
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await _createCustomerTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          await db.execute(
-            'ALTER TABLE ${Tables.CUSTOMER_TABLE_NAME} '
-            'ADD COLUMN ${Tables.COLUMN_NAME_IF_DISTRIBUTOR} INTEGER NOT NULL DEFAULT 0',
-          );
-          await db.execute(
-            'ALTER TABLE ${Tables.CUSTOMER_TABLE_NAME} '
-            'ADD COLUMN ${Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID} INTEGER',
-          );
+          try {
+            await db.execute(
+              'ALTER TABLE ${Tables.CUSTOMER_TABLE_NAME} '
+              'ADD COLUMN ${Tables.COLUMN_NAME_IF_DISTRIBUTOR} INTEGER NOT NULL DEFAULT 0',
+            );
+          } catch (_) {}
+          try {
+            await db.execute(
+              'ALTER TABLE ${Tables.CUSTOMER_TABLE_NAME} '
+              'ADD COLUMN ${Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID} INTEGER',
+            );
+          } catch (_) {}
+        }
+
+        // v2 -> v3: add offline-sync tracking columns, same role as
+        // sale_orders.suitAppsId/isSynced/serverOrderId in DatabaseHelper.
+        // Without these, CustomerService had no way to know which local
+        // customers still needed pushing to the server, and no stable id
+        // to correlate a local row with the server's Accout row — see
+        // CustomerSyncService.
+        if (oldVersion < 3) {
+          try {
+            await db.execute(
+              'ALTER TABLE ${Tables.CUSTOMER_TABLE_NAME} '
+              'ADD COLUMN ${Tables.COLUMN_NAME_SUIT_APPS_ID} TEXT',
+            );
+          } catch (_) {}
+          try {
+            await db.execute(
+              'ALTER TABLE ${Tables.CUSTOMER_TABLE_NAME} '
+              'ADD COLUMN ${Tables.COLUMN_NAME_IS_SYNCED} INTEGER NOT NULL DEFAULT 0',
+            );
+          } catch (_) {}
+          try {
+            await db.execute(
+              'ALTER TABLE ${Tables.CUSTOMER_TABLE_NAME} '
+              'ADD COLUMN ${Tables.COLUMN_NAME_SERVER_ACCOUNT_CODE} TEXT',
+            );
+          } catch (_) {}
         }
       },
     );
@@ -65,7 +103,10 @@ class CustomerService {
         ${Tables.COLUMN_NAME_COMPANY_ID} TEXT,
         ${Tables.COLUMN_NAME_Date} TEXT,
         ${Tables.COLUMN_NAME_IF_DISTRIBUTOR} INTEGER NOT NULL DEFAULT 0,
-        ${Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID} INTEGER
+        ${Tables.COLUMN_NAME_DISTRIBUTOR_WISE_CUST_ID} INTEGER,
+        ${Tables.COLUMN_NAME_SUIT_APPS_ID} TEXT,
+        ${Tables.COLUMN_NAME_IS_SYNCED} INTEGER NOT NULL DEFAULT 0,
+        ${Tables.COLUMN_NAME_SERVER_ACCOUNT_CODE} TEXT
       )
     ''');
 
@@ -83,11 +124,25 @@ class CustomerService {
     );
   }
 
+  /// Inserts a new customer/distributor row. A `SuitAppsId` is generated
+  /// here (timestamp-based, same shape as the id-generation pattern used
+  /// for sale orders) UNLESS `customer.toMap()` already provides one —
+  /// this keeps things working even before CustomerModel is updated to
+  /// carry SuitAppsId/IsSynced itself.
   Future<int> insertCustomer(CustomerModel customer) async {
     final db = await database;
+    final map = Map<String, dynamic>.from(customer.toMap());
+
+    if (map[Tables.COLUMN_NAME_SUIT_APPS_ID] == null ||
+        map[Tables.COLUMN_NAME_SUIT_APPS_ID].toString().isEmpty) {
+      map[Tables.COLUMN_NAME_SUIT_APPS_ID] =
+          'CUST-${DateTime.now().millisecondsSinceEpoch}';
+    }
+    map[Tables.COLUMN_NAME_IS_SYNCED] ??= 0;
+
     return db.insert(
       Tables.CUSTOMER_TABLE_NAME,
-      customer.toMap(),
+      map,
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
   }
@@ -168,5 +223,40 @@ class CustomerService {
       orderBy: '${Tables.KEY_CustomerID} DESC',
     );
     return result.map(CustomerModel.fromMap).toList();
+  }
+
+  // ------------------------------------------------------
+  // SYNC SUPPORT — used by CustomerSyncService
+  // ------------------------------------------------------
+
+  /// All customer/distributor rows not yet pushed to the server, oldest
+  /// first. Returns raw maps (not CustomerModel) since the sync payload
+  /// needs the exact column values, keyed by the SAME column names used
+  /// everywhere else in this file (Tables.* constants) — see
+  /// CustomerSyncService._toApiPayload, which reads row[Tables.xxx].
+  Future<List<Map<String, dynamic>>> getUnsyncedCustomers() async {
+    final db = await database;
+    return db.query(
+      Tables.CUSTOMER_TABLE_NAME,
+      where: '${Tables.COLUMN_NAME_IS_SYNCED} = ?',
+      whereArgs: [0],
+      orderBy: '${Tables.KEY_CustomerID} ASC',
+    );
+  }
+
+  /// Marks a customer/distributor as synced once /InsertUpdateCustomer
+  /// confirms save, storing the server's AccountCode for any future
+  /// UPDATE sync of this same row.
+  Future<void> markCustomerSynced(String suitAppsId, String accountCode) async {
+    final db = await database;
+    await db.update(
+      Tables.CUSTOMER_TABLE_NAME,
+      {
+        Tables.COLUMN_NAME_IS_SYNCED: 1,
+        Tables.COLUMN_NAME_SERVER_ACCOUNT_CODE: accountCode,
+      },
+      where: '${Tables.COLUMN_NAME_SUIT_APPS_ID} = ?',
+      whereArgs: [suitAppsId],
+    );
   }
 }

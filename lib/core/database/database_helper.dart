@@ -23,7 +23,7 @@ class DatabaseHelper {
     // bump version when schema changes so existing DBs get upgraded
     return openDatabase(
       path,
-      version: 12,
+      version: 13,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE customers(
@@ -170,6 +170,18 @@ class DatabaseHelper {
           } catch (_) {}
           try {
             await db.execute('ALTER TABLE sale_orders ADD COLUMN orderNumber INTEGER');
+          } catch (_) {}
+        }
+
+        // v12 -> v13: SaleOrderPage now serves two order types — Primary
+        // Order and Secondary Sales — from the same screen, distinguished
+        // only by this new `status` column (1 = Primary, 0 = Secondary).
+        // DEFAULT 1 so every order created before this column existed
+        // (i.e. everything saved through the old, Primary-only flow)
+        // reads back as Primary rather than NULL/Secondary.
+        if (oldVersion < 13) {
+          try {
+            await db.execute('ALTER TABLE sale_orders ADD COLUMN status INTEGER DEFAULT 1');
           } catch (_) {}
         }
       },
@@ -328,6 +340,12 @@ class DatabaseHelper {
   //     legacy combined display string for any screen that still expects
   //     one field (e.g. bill printing) — drop it once nothing depends on
   //     it.
+  //   • status — added in schema v13. SaleOrderPage now serves two order
+  //     types, Primary Order and Secondary Sales, from the same screen;
+  //     `status` is the ONLY thing distinguishing them (1 = Primary,
+  //     0 = Secondary). This is a separate column from `orderStatus`
+  //     above, which tracks the order's Pending/Confirmed/Dispatched/
+  //     Cancelled lifecycle — don't conflate the two.
   //   • orderNo — Sync_AliasDirectSales GENERATES this itself on insert
   //     (see the proc: "@NO = COUNT(OrderNo)+1 ... @OrderNo=@UID+'-'+@NO")
   //     and does NOT return it via an OUT parameter. That means the app
@@ -372,6 +390,7 @@ class DatabaseHelper {
         advanceAmount REAL,
         totalAmount REAL,
         orderStatus REAL,
+        status INTEGER DEFAULT 1,
         discount REAL,
         discountRate TEXT,
         billSeries TEXT,
@@ -766,6 +785,20 @@ Future<void> insertLocalReceipt(Map<String, dynamic> receiptData) async {
       where: 'isSynced = ?',
       whereArgs: [0],
       orderBy: 'createdDate ASC',
+    );
+  }
+
+  /// Sale order headers of a given type only — status = 1 for Primary
+  /// Orders, status = 0 for Secondary Sales. Handy for screens (e.g. an
+  /// order-history list) that want to show just one of the two flows
+  /// rather than everything in `sale_orders`.
+  Future<List<Map<String, dynamic>>> getSaleOrdersByStatus(int status) async {
+    final db = await database;
+    return db.query(
+      'sale_orders',
+      where: 'status = ?',
+      whereArgs: [status],
+      orderBy: 'createdDate DESC',
     );
   }
 

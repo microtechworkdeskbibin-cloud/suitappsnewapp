@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:suitapps/routes/app_routes.dart';
-import 'package:suitapps/shared/theme/app_theme.dart';
+import 'package:suitapps/features/splash/presentation/pages/splash_page.dart';
 
 void main() => runApp(const SuitAppsApp());
 
@@ -12,9 +11,9 @@ class SuitAppsApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Suitapps',
-      theme: AppTheme.light,
-      initialRoute: AppRoutes.splash,
-      routes: AppRoutes.routes,
+      theme: ThemeData(useMaterial3: true),
+      initialRoute: '/splash',
+      routes: {'/splash': (_) => const SuitappsSplashPage()},
     );
   }
 }

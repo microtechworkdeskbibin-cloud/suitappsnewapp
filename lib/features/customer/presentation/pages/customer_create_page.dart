@@ -4,6 +4,7 @@ import 'package:suitapps/features/customer/data/models/customer_model.dart';
 import 'package:suitapps/features/customer/data/datasources/customer_local_datasource.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:suitapps/features/customer/services/customer_sync_service.dart';
 
 class CustomerDashboardPage extends StatefulWidget {
   const CustomerDashboardPage({super.key});
@@ -14,7 +15,7 @@ class CustomerDashboardPage extends StatefulWidget {
 
 class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     with TickerProviderStateMixin {
-  // â”€â”€â”€ Design System â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Design System ────────────────────────────────────────────────────
   static const Color primary = Color.fromARGB(255, 35, 0, 196);
   static const Color primaryLight = Color(0xFF6F7FDB);
   static const Color bgColor = Color(0xFFF5F7FB);
@@ -49,7 +50,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     ),
   ];
 
-  // â”€â”€â”€ Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Form ─────────────────────────────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
   bool _autoValidate = false;
@@ -138,16 +139,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     super.dispose();
   }
 
-  // â”€â”€â”€ Image Picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Future<void> _pickImage() async {
-  //   final XFile? image = await _picker.pickImage(
-  //     source: ImageSource.gallery,
-  //     imageQuality: 80,
-  //   );
-  //   if (image != null) {
-  //     setState(() => _selectedImage = File(image.path));
-  //   }
-  // }
+  // ─── Image Picker ─────────────────────────────────────────────────────
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(
       source: ImageSource.camera,
@@ -175,7 +167,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     }
   }
 
-  // â”€â”€â”€ Validators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Validators ───────────────────────────────────────────────────────
   String? _required(String? v, String field) {
     if (v == null || v.trim().isEmpty) return '$field is required';
     return null;
@@ -247,7 +239,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     return null;
   }
 
-  // â”€â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Save ─────────────────────────────────────────────────────────────
   Future<void> _save() async {
     setState(() => _autoValidate = true);
     final isValid = _formKey.currentState?.validate() ?? false;
@@ -300,6 +292,15 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
       );
       final id = await CustomerService().insertCustomer(customer);
       debugPrint('Customer saved with ID: $id');
+
+      // FIX: this was the missing piece — the local save succeeded but
+      // nothing ever told CustomerSyncService to push it to the server.
+      // Fire-and-forget: if online, this pushes immediately; if offline,
+      // the row stays IsSynced=0 and gets picked up by the connectivity
+      // listener (CustomerSyncService.startListening) once back online.
+      // ignore: unawaited_futures
+      CustomerSyncService.instance.trySyncNow();
+
       if (!mounted) return;
       _showSnack('Customer saved successfully!', isError: false);
     } catch (e) {
@@ -339,7 +340,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
   }
 
-  // â”€â”€â”€ UI Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── UI Helpers ───────────────────────────────────────────────────────
 
   /// Shared InputDecoration
   InputDecoration _inputDec(
@@ -563,7 +564,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
   /// Vertical gap between fields
   Widget _gap([double size = md]) => SizedBox(height: size);
 
-  // â”€â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Build ────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -586,9 +587,6 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
               _gap(sm),
               _buildAddressCard(),
               _gap(sm),
-              // _buildFinancialCard(),
-              // _gap(lg),
-              // _buildSaveButton(),
               _buildFinancialCard(),
               _gap(sm),
 
@@ -603,7 +601,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
   }
 
-  // â”€â”€â”€ AppBar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── AppBar ───────────────────────────────────────────────────────────
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: primary,
@@ -629,14 +627,14 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
   }
 
-  // â”€â”€â”€ Profile Card â€” compact horizontal avatar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Profile Card — compact horizontal avatar ────────────────────────
   Widget _buildProfileCard() {
     return _card(
       child: GestureDetector(
         onTap: _pickImage,
         child: Row(
           children: [
-            // Avatar â€” 56Ã—56
+            // Avatar — 56×56
             Stack(
               children: [
                 Container(
@@ -715,7 +713,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
   }
 
-  // â”€â”€â”€ GSTIN Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── GSTIN Card ───────────────────────────────────────────────────────
   Widget _buildGSTINCard() {
     return _card(
       child: Column(
@@ -743,7 +741,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
   }
 
-  // â”€â”€â”€ Customer Info Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Customer Info Card ───────────────────────────────────────────────
   Widget _buildCustomerInfoCard() {
     return _card(
       child: Column(
@@ -821,7 +819,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
             onChanged: (v) => setState(() => _customerType = v),
           ),
           _gap(),
-          // Category + Rate Type â€” 2-column row
+          // Category + Rate Type — 2-column row
           Row(
             children: [
               Expanded(
@@ -848,7 +846,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
   }
 
-  // â”€â”€â”€ Contact Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Contact Card ─────────────────────────────────────────────────────
   Widget _buildDistributorDropdown() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -942,7 +940,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
             validator: _validateEmail,
           ),
           _gap(),
-          // Mobile + Phone â€” 2-column row
+          // Mobile + Phone — 2-column row
           _field(
             'Mobile',
             isRequired: true,
@@ -982,14 +980,14 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
   }
 
-  // â”€â”€â”€ Address Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Address Card ─────────────────────────────────────────────────────
   Widget _buildAddressCard() {
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _sectionHeader('Location Details', Icons.location_on_rounded),
-          // City + PIN â€” 2-column row
+          // City + PIN — 2-column row
           _field(
             'City',
             isRequired: true,
@@ -1050,7 +1048,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
   }
 
-  // â”€â”€â”€ Financial Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Financial Card ───────────────────────────────────────────────────
   Widget _buildFinancialCard() {
     return _card(
       child: Column(
@@ -1171,7 +1169,7 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     );
   }
 
-  // â”€â”€â”€ Save Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Save Button ──────────────────────────────────────────────────────
   Widget _buildSaveButton() {
     return SizedBox(
       height: 52,
@@ -1195,30 +1193,30 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
                   strokeWidth: 2.5,
                 ),
               )
-: Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      const Icon(Icons.save_rounded, size: 18),
-      const SizedBox(width: sm),
-      Text(
-        _accountType == 'Distributor'
-            ? 'Save Distributor'
-            : 'Save Customer',
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
-          letterSpacing: 0.2,
-        ),
-      ),
-    ],
-  ),
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.save_rounded, size: 18),
+                  const SizedBox(width: sm),
+                  Text(
+                    _accountType == 'Distributor'
+                        ? 'Save Distributor'
+                        : 'Save Customer',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
 }
 
-// â”€â”€â”€ Formatter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Formatter ────────────────────────────────────────────────────────
 class UpperCaseTextFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(

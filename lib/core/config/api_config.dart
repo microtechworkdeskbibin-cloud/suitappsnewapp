@@ -1,61 +1,156 @@
 class ApiConfig {
-  // Base URL for API endpoints
+  // ============================================================
+  // BASE URL
+  // ============================================================
 
+  // Production
+  // static const String baseUrl =
+  //     'https://suitapptestapp.suitappssfa.com/api';
 
-// static const String baseUrl = 'https://flutterapp.suitapp.in/api';
-   static const String baseUrl = 'http://192.168.1.41:5000/api';
+  // Production
+  // static const String baseUrl ='https://flutterapp.suitapp.in/api';
 
+  // Local development
+  static const String baseUrl = 'http://192.168.1.36:5000/api';
 
-  // Full API base URL with version
   static const String apiBaseUrl = baseUrl;
 
+  // ============================================================
+  // TSM / SALES HEAD DASHBOARD
+  // ============================================================
 
-  static const String insertreceipt = '/syncReceiptApp';
-  // Common endpoints
+  static const String tsmDashboardBase = '/TSMDashboard';
+
+  // GET:
+  // /api/TSMDashboard/userHierarchy
+  static const String getUserHierarchy = '$tsmDashboardBase/userHierarchy';
+
+  // GET:
+  // /api/TSMDashboard/dashboard
+  static const String getTSMDashboard = '$tsmDashboardBase/dashboard';
+
+  // ============================================================
+  // LOGIN
+  // ============================================================
+
   static const String loginEndpoint = '/login';
+
   static const String companiesUrl = '/companies';
+
   static const String insertLoginLogUrl = '/insertLoginLog';
+
   static const String getFYearIDUrl = '/getFYearID';
-  // Allocation / bill numbers
+
+  // ============================================================
+  // ALLOCATION / BILL
+  // ============================================================
+
   static const String getAllocationDetailsUrl = '/GetAllocationDetails';
-  
-  //suitapp
-  static const String getrootNameUrl = '/GetRouteName';  
+
+  // ============================================================
+  // SUITAPP
+  // ============================================================
+
+  static const String getrootNameUrl = '/GetRouteName';
+
   static const String getCustomersUrl = '/GetCustomerDetails';
+
   static const String sendOtp = '/sendOtp';
+
   static const String resetPassword = '/resetPassword';
+
+  // ============================================================
+  // ATTENDANCE
+  // ============================================================
+
   static const String getAttendanceTypes = '/getAttendanceTypes';
+
   static const String insertEmployeeAttendance = '/insertEmployeeAttendance';
+
   static const String checkTodayAttendance = '/checkTodayAttendance';
+
+  // ============================================================
+  // LEAVE
+  // ============================================================
+
   static const String getLeaveTypes = '/getLeaveTypes';
+
   static const String insertLeaveRequest = '/insertLeaveRequest';
-  // static const String getLeaveRequests = '/getLeaveRequests';
+
   static const String getAllRootsByEmp = '/getAllRootsByEmp';
-  //report history
+
+  // ============================================================
+  // REPORT HISTORY
+  // ============================================================
+
   static const String getOutstanding = '/GetOutstanding';
+
   static const String getNotApprovalCheque = '/GetNotApprovalCheque';
+
   static const String getSalesHistory = '/GetSalesHistory';
+
   static const String getReceiptsHistoryByID = '/GetReceiptsHistoryByID';
+
   static const String getBillingReturnHistory = '/GetBillingReturnHistory';
-  //odometer
+
+  // ============================================================
+  // ODOMETER
+  // ============================================================
+
   static const String insertOdometer = '/saveOdometer';
 
-  // Item / Van sync endpoints
+  // ============================================================
+  // ITEM / VAN SYNC
+  // ============================================================
+
   static const String getItemCategoryUrl = '/GetItemCategory';
+
   static const String getVanItemsUrl = '/GetVanItems';
 
+  // ============================================================
+  // BILLING
+  // ============================================================
 
-    // Billing / Van sync endpoints
   static const String insertBillingDetails = '/syncBillingDetailsApp';
+
   static const String insertBilling = '/syncBillingApp';
 
-    // Order 
+  // ============================================================
+  // ORDER
+  // ============================================================
+
   static const String insertOrder = '/syncSaleOrderApp';
 
+  // ============================================================
+  // CUSTOMER
+  // ============================================================
+
+  static const String insertCustomer = '/InsertUpdateCustomer';
+
+  static const String getDistributorsUrl = '/GetDistributors';
+
+  static const String getDistributorsByUserUrl = '/GetDistributorByUser';
+
+  static const String getDistributorCustomerOrdersUrl =
+      '/GetDistributorCustomerOrders';
+
+  // ============================================================
+  // RECEIPT
+  // ============================================================
+
+  static const String insertreceipt = '/syncReceiptApp';
+
+  // ============================================================
+  // PERMISSIONS
+  // ============================================================
 
   static const String getPermissionsUrl = '/GetPermissions';
-  // Timeouts
+
+  // ============================================================
+  // TIMEOUT
+  // ============================================================
+
   static const Duration connectionTimeout = Duration(seconds: 30);
+
   static const Duration receiveTimeout = Duration(seconds: 30);
 }
-         

@@ -925,7 +925,7 @@ class _DirectSaleOfCustomerState extends State<DirectSaleOfCustomer> {
                 children: [
                   Text('Outstanding', style: DsFonts.caption),
                   Text(
-                    'â‚¹$outstanding',
+                    '${DsConstants.currencySymbol}$outstanding',
                     style: DsFonts.bodyBold.copyWith(color: DsColors.error),
                   ),
                 ],
@@ -1132,7 +1132,7 @@ class _DirectSaleOfCustomerState extends State<DirectSaleOfCustomer> {
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  'â‚¹${item.rate.toStringAsFixed(0)} (${item.rateType}) Â· Qty ${item.qty}'
+                  '${DsConstants.currencySymbol}${item.rate.toStringAsFixed(0)} (${item.rateType}) Â· Qty ${item.qty}'
                   '${item.freeQty > 0 ? ' +${item.freeQty} free' : ''}'
                   '${item.discountPercentDisplay > 0 ? ' Â· ${item.discountPercentDisplay.toStringAsFixed(0)}% off' : ''}',
                   style: DsFonts.caption.copyWith(fontSize: 11),
@@ -1143,7 +1143,7 @@ class _DirectSaleOfCustomerState extends State<DirectSaleOfCustomer> {
             ),
           ),
           const SizedBox(width: DsSpacing.xs),
-          Text('â‚¹${item.netAmount.toStringAsFixed(2)}', style: DsFonts.bodyBold.copyWith(fontSize: 13)),
+          Text('${DsConstants.currencySymbol}${item.netAmount.toStringAsFixed(2)}', style: DsFonts.bodyBold.copyWith(fontSize: 13)),
           InkWell(
             onTap: () => _removeItem(item),
             borderRadius: BorderRadius.circular(6),
@@ -1186,7 +1186,7 @@ class _DirectSaleOfCustomerState extends State<DirectSaleOfCustomer> {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerRight,
                       child: Text(
-                        'â‚¹${_totalAmount.toStringAsFixed(2)}',
+                        '${DsConstants.currencySymbol}${_totalAmount.toStringAsFixed(2)}',
                         style: DsFonts.sectionTitle.copyWith(color: DashboardConstants.brandBlue, fontSize: 20),
                       ),
                     ),
@@ -1204,16 +1204,16 @@ class _DirectSaleOfCustomerState extends State<DirectSaleOfCustomer> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _buildInlineStat('Sub Total', 'â‚¹${_subTotal.toStringAsFixed(2)}')),
-              Expanded(child: _buildInlineStat('Tax (GST)', 'â‚¹${_totalTax.toStringAsFixed(2)}')),
+              Expanded(child: _buildInlineStat('Sub Total', '${DsConstants.currencySymbol}{_subTotal.toStringAsFixed(2)}')),
+              Expanded(child: _buildInlineStat('Tax (GST)', '${DsConstants.currencySymbol}${_totalTax.toStringAsFixed(2)}')),
             ],
           ),
           const SizedBox(height: DsSpacing.xs),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _buildInlineStat('Discount', '- â‚¹${_totalDiscount.toStringAsFixed(2)}', valueColor: DsColors.success)),
-              Expanded(child: _buildInlineStat('Round Off', 'â‚¹${_roundOff.toStringAsFixed(2)}')),
+              Expanded(child: _buildInlineStat('Discount', '- ${DsConstants.currencySymbol}${_totalDiscount.toStringAsFixed(2)}', valueColor: DsColors.success)),
+              Expanded(child: _buildInlineStat('Round Off', ' ${DsConstants.currencySymbol}${_roundOff.toStringAsFixed(2)}')),
             ],
           ),
         ],
@@ -1309,11 +1309,11 @@ class _DirectSaleOfCustomerState extends State<DirectSaleOfCustomer> {
               children: [
                 Text('Amount Received', style: DsFonts.caption),
                 Text(
-                  'â‚¹${_totalAmount.toStringAsFixed(2)}',
+                  '${DsConstants.currencySymbol}${_totalAmount.toStringAsFixed(2)}',
                   style: DsFonts.bodyBold.copyWith(color: DashboardConstants.brandBlue),
                 ),
               ],
-            ),
+            ), 
           ),
         ],
       ],

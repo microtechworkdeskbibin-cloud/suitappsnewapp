@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:suitapps/features/auth/presentation/pages/dashboard_constants.dart';
-import 'package:suitapps/shared/extensions/responsive.dart'; // âœ… adjust path to your Responsive file
+import 'package:suitapps/shared/extensions/responsive.dart'; // adjust path to your Responsive file
 
 class DashboardHeader extends StatelessWidget {
   const DashboardHeader({
@@ -34,7 +34,7 @@ class DashboardHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final greeting = _getGreetingByTime();
 
-    // âœ… Responsive values
+    // Responsive values
     final double pad = Responsive.pad(context, 10.0);
     final double iconPad = Responsive.pad(context, 6.0);
     final double iconSize = Responsive.scale(context, 32.0);
@@ -53,7 +53,7 @@ class DashboardHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // LEFT: menu icon
+          // LEFT: menu icon (fixed size)
           InkWell(
             onTap: onMenuTap,
             borderRadius: BorderRadius.circular(menuRadius),
@@ -63,45 +63,52 @@ class DashboardHeader extends StatelessWidget {
             ),
           ),
 
-          const Spacer(),
-
-          // RIGHT TEXT (aligned to avatar)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              RichText(
-                textAlign: TextAlign.right,
-                text: TextSpan(
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: greetFont,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  children: [
-                    TextSpan(text: "$greeting, "),
-                    TextSpan(
-                      text: name.isEmpty ? "User" : name,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+          // MIDDLE: greeting + date, allowed to shrink and truncate
+          // instead of forcing the Row wider than the screen.
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: gapW / 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RichText(
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    text: TextSpan(
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: greetFont,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      children: [
+                        TextSpan(text: "$greeting, "),
+                        TextSpan(
+                          text: name.isEmpty ? "User" : name,
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: Responsive.pad(context, 2.0)),
+                  Text(
+                    dateText,
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: dateFont,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(height: Responsive.pad(context, 2.0)),
-              Text(
-                dateText,
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: dateFont,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+            ),
           ),
 
-          SizedBox(width: gapW),
-
-          // RIGHT: profile image (click opens profile page via onProfileTap)
+          // RIGHT: profile image (fixed size, click opens profile page)
           InkWell(
             onTap: onProfileTap,
             borderRadius: BorderRadius.circular(999),
@@ -139,7 +146,7 @@ class _AvatarImage extends StatelessWidget {
       return Image.network(
         imageUrl!,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => _fallback(context),
+        errorBuilder: (_, __, ___) => _fallback(context),
       );
     }
     return _fallback(context);

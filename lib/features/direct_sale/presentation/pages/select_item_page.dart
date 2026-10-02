@@ -738,7 +738,7 @@ class _SelectItemPageState extends State<SelectItemPage> {
                   Expanded(
                     child: _buildSummaryStat(
                       'Total Amount',
-                      'â‚¹${_totalAmount.toStringAsFixed(2)}',
+                      '${DsConstants.currencySymbol}${_totalAmount.toStringAsFixed(2)}',
                       valueColor: DsColors.primary,
                       alignEnd: true,
                     ),
@@ -856,7 +856,7 @@ class _CompactProductRow extends StatelessWidget {
               children: [
                 // Full item name shown â€” no maxLines/ellipsis truncation.
                 Text(product.displayName, style: DsFonts.bodyBold),
-                Text('â‚¹${draft.rate.toStringAsFixed(2)} â€¢ Stock: ${product.stock.toStringAsFixed(0)}', style: DsFonts.caption),
+                Text('${DsConstants.currencySymbol}${draft.rate.toStringAsFixed(2)} â€¢ Stock: ${product.stock.toStringAsFixed(0)}', style: DsFonts.caption),
               ],
             ),
           ),
@@ -1220,7 +1220,7 @@ class _InlineProductCardState extends State<_InlineProductCard> {
           ],
           const SizedBox(height: DsSpacing.sm),
 
-          // Discount % / Discount â‚¹ / live Amount
+          // Discount % / Discount ${DsConstants.currencySymbol} / live Amount
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1241,7 +1241,7 @@ class _InlineProductCardState extends State<_InlineProductCard> {
               const SizedBox(width: DsSpacing.sm),
               Expanded(
                 child: _buildLabeledField(
-                  label: 'Disc. â‚¹',
+                  label: 'Disc. ${DsConstants.currencySymbol}',
                   child: _buildTextInput(
                     controller: _discAmountController,
                     readOnly: !widget.allowManualDiscount, // ALLOW_MANUAL_DISCOUNT gate
@@ -1270,7 +1270,7 @@ class _InlineProductCardState extends State<_InlineProductCard> {
                           borderRadius: BorderRadius.circular(DsRadius.button),
                         ),
                         child: Text(
-                          'â‚¹${draft.netAmountFor(widget.taxMode).toStringAsFixed(2)}',
+                          '${DsConstants.currencySymbol}${draft.netAmountFor(widget.taxMode).toStringAsFixed(2)}',
                           style: DsFonts.bodyBold.copyWith(color: DsColors.primary),
                         ),
                       ),
@@ -1278,8 +1278,8 @@ class _InlineProductCardState extends State<_InlineProductCard> {
                         const SizedBox(height: 2),
                         Text(
                           widget.taxMode == 'EXCLUDE'
-                              ? '+â‚¹${draft.taxAmountFor(widget.taxMode).toStringAsFixed(2)} tax'
-                              : 'incl. â‚¹${draft.taxAmountFor(widget.taxMode).toStringAsFixed(2)} tax',
+                              ? '+${DsConstants.currencySymbol}${draft.taxAmountFor(widget.taxMode).toStringAsFixed(2)} tax'
+                              : 'incl. ${DsConstants.currencySymbol}${draft.taxAmountFor(widget.taxMode).toStringAsFixed(2)} tax',
                           style: DsFonts.caption,
                         ),
                       ],

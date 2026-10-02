@@ -26,20 +26,43 @@ import 'package:suitapps/features/auth/presentation/pages/dashboard_constants.da
 /// hard-wired to `BillItem`. Rather than forking SelectItemPage, this page
 /// converts at the boundary via `_orderItemFromBillItem` / `_billItemFromOrderItem`.
 ///
+/// PRIMARY vs SECONDARY:
+///   This same page now serves BOTH "Primary Order" and "Secondary Sales"
+///   from CustomerInfoPage's Quick Actions grid — see the `isPrimary` flag
+///   below. The two flows are otherwise 100% identical (UI, item
+///   selection, totals, save flow); the ONLY difference is the new
+///   `status` column persisted with the order: 1 for Primary, 0 for
+///   Secondary. See `_orderTypeStatus` and its use in `_saveOrder`.
+///
 /// CHANGE LOG (fixes applied):
 ///   • orderSeries/orderNumber are now saved as TWO SEPARATE local columns
 ///     instead of being pre-joined into a single "series-number" string.
 ///     `orderNo` is still saved too, purely as a display/legacy string, in
 ///     case other screens (e.g. bill printing) still read it that way.
-///     >>> DatabaseHelper's `sale_orders` table + insert method must be
-///     >>> updated to add `orderSeries` (TEXT) and `orderNumber` (INTEGER)
-///     >>> columns — not done here, that file wasn't available.
 ///   • `amount` now stores the FINAL amount (same value as `totalAmount`,
-///     tax included), not the pre-tax subtotal. Previously `amount` was
-///     fed `_subTotal`, which is why it showed as e.g. 190.47 instead of
-///     the expected 200.0 final total.
+///     tax included), not the pre-tax subtotal.
+///   • cgstRate/cgstAmount/sgstRate/sgstAmount are now computed and saved
+///     locally (CGST = SGST = taxPercent / 2, taxAmount / 2) instead of
+///     being written as NULL.
+///   • Added `isPrimary` flag + `status` column (1 = Primary, 0 =
+///     Secondary) — see "PRIMARY vs SECONDARY" above.
+///   • FIX: `customerId` now resolves to the real numeric AccountID from
+///     dbo.Accout FIRST (keys 'AccountID' / 'AccountId'), instead of
+///     silently falling through to AccountCode/Code because those exact
+///     key names weren't in the lookup list. Previously an order saved
+///     with the customer's display CODE in the CustomerID column instead
+///     of their actual AccountID, breaking the FK relationship on the
+///     server (AliaseSales.CustomerID). See `_readValue` call below.
 class SaleOrderPage extends StatefulWidget {
   final Map<String, dynamic> customer;
+
+  /// True = Primary Order, false = Secondary Sales. The only behavioural
+  /// difference between the two order types is the `status` column
+  /// persisted with the order (1 for primary, 0 for secondary) — see
+  /// `_orderTypeStatus`. Everything else (UI, item selection, totals,
+  /// save flow) is identical. Defaults to true so existing call sites
+  /// that don't pass it keep behaving as a Primary order.
+  final bool isPrimary;
 
   /// When non-null, opens in EDIT mode: a row from the local `sale_orders`
   /// table (see DatabaseHelper.getAllSaleOrders).
@@ -51,6 +74,7 @@ class SaleOrderPage extends StatefulWidget {
   const SaleOrderPage({
     super.key,
     required this.customer,
+    this.isPrimary = true,
     this.orderToEdit,
     this.orderItemsToEdit,
   });
@@ -84,17 +108,21 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
   bool _isSaving = false;
 
   // ── Order series / order number (B2B vs B2C) ──
-  // Mirrors DirectSaleOfCustomer's _billSeries/_billNo/_loadingBillNo, but
-  // keyed off the *Order* prefs saved by _fetchAndSaveAllocation():
-  //   B2COrderSeries, B2BOrderSeries, GreatestB2COrderBillNo,
-  //   GreatestB2BOrderBillNo
-  // so order numbers run their own continuous sequence (10, 11, 12, ...)
-  // independent of the bill sequence.
   String _orderSeries = '';
   String _orderBillNo = '';
   bool _loadingOrderNo = true;
 
   bool get _isEditing => widget.orderToEdit != null;
+
+  // ── Primary vs Secondary ──
+  int get _orderTypeStatus {
+    if (_isEditing) {
+      return (widget.orderToEdit!['status'] as num?)?.toInt() ?? (widget.isPrimary ? 1 : 0);
+    }
+    return widget.isPrimary ? 1 : 0;
+  }
+
+  bool get _resolvedIsPrimary => _orderTypeStatus == 1;
 
   @override
   void initState() {
@@ -104,8 +132,6 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
     } else {
       _loadOrderSeriesAndNumber();
     }
-    // Flush any orders saved locally while offline so they don't sit there
-    // forever, same pattern as DirectSaleOfCustomer's _syncPendingBills.
     SaleOrderSyncService.instance.trySyncNow();
   }
 
@@ -116,8 +142,6 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
     super.dispose();
   }
 
-  // ── Bridges between this feature's OrderItem and direct_sale's BillItem
-  // (SelectItemPage only knows about BillItem — see class doc above). ──
   OrderItem _orderItemFromBillItem(ds_bill.BillItem b) {
     return OrderItem(
       productId: b.productId,
@@ -201,22 +225,10 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
       _advanceAmountController.text = (order['advanceAmount'] ?? 0).toString();
       _narrationController.text = order['narration']?.toString() ?? '';
       _orderStatus = (order['orderStatus'] as num?)?.toDouble() ?? 0;
-      // An edit keeps its ORIGINAL order number (already the full
-      // "series-number" string, or whatever was saved) rather than
-      // re-deriving it from the live series/counter prefs below, which
-      // may have moved on since this order was first created.
       _loadingOrderNo = false;
     });
   }
 
-  // ── Pull the right order series + next order number from
-  // SharedPreferences ──
-  // These were saved at login time by _fetchAndSaveAllocation():
-  //   B2COrderSeries, B2BOrderSeries, GreatestB2COrderBillNo,
-  //   GreatestB2BOrderBillNo, VanID
-  // NOTE: only used for a fresh (non-edit) order — see initState, which
-  // skips this entirely when _isEditing and calls _seedFromOrderToEdit
-  // instead, so an edited order keeps its ORIGINAL series/number.
   Future<void> _loadOrderSeriesAndNumber() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -229,10 +241,6 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
           ? (prefs.getInt('GreatestB2BOrderBillNo') ?? 0)
           : (prefs.getInt('GreatestB2COrderBillNo') ?? 0);
 
-      // The next order will be one more than the greatest already issued
-      // (either synced, or already reserved locally — see
-      // _bumpGreatestOrderBillNo, which runs immediately after every local
-      // save, not just after a successful server sync).
       final nextOrderNo = (greatestOrderNo + 1).toString();
 
       if (!mounted) return;
@@ -250,14 +258,6 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
     }
   }
 
-  /// Reserves the given order number locally by bumping the stored
-  /// "greatest order no" counter in SharedPreferences, if it's higher than
-  /// what's already there. Called immediately after EVERY NEW local save
-  /// (online or offline) — not just after a successful server sync — so
-  /// the same preview order number is never handed out twice, even if the
-  /// device stays offline for several orders in a row (10, then 11, then
-  /// 12, ...). NOT called when editing an existing order — an edit reuses
-  /// its original number and must never bump the counter.
   Future<void> _bumpGreatestOrderBillNo(int savedOrderNo) async {
     final prefs = await SharedPreferences.getInstance();
     final key = _isB2BCustomer ? 'GreatestB2BOrderBillNo' : 'GreatestB2COrderBillNo';
@@ -271,21 +271,11 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
     await _loadOrderSeriesAndNumber();
   }
 
-  /// The order number as shown in the UI: "series-number" for a fresh
-  /// order (e.g. "B2C-11"), or reconstructed from the saved
-  /// orderSeries/orderNumber columns when editing an existing one.
-  ///
-  /// NOTE: this is a DISPLAY string only. The actual saved row (see
-  /// _saveOrder) stores orderSeries and orderNumber as two SEPARATE
-  /// columns — this getter just joins them for the UI, and for the
-  /// legacy combined `orderNo` field kept for backward compatibility.
   String get _displayOrderNo {
     if (_isEditing) {
       final series = widget.orderToEdit?['orderSeries']?.toString() ?? '';
       final number = widget.orderToEdit?['orderNumber']?.toString() ?? '';
       if (series.isEmpty && number.isEmpty) {
-        // Fallback for rows saved before this fix, which only have the
-        // old combined `orderNo` column.
         return widget.orderToEdit?['orderNo']?.toString() ?? '';
       }
       return series.isEmpty ? number : '$series-$number';
@@ -294,13 +284,6 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
     return _orderSeries.isEmpty ? _orderBillNo : '$_orderSeries-$_orderBillNo';
   }
 
-  /// Reconstructs an OrderItem from a `sale_order_items` row. Unlike
-  /// DirectSaleOfCustomer's bill_items (which only stores a combined
-  /// taxAmount), this table's taxRate column already holds the ORIGINAL
-  /// combined tax percentage as text (the CGST/SGST split only happens at
-  /// sync-payload time — see SaleOrderSyncService — never stored locally
-  /// as the split), so taxPercent can be read directly rather than
-  /// back-solved.
   OrderItem _orderItemFromRow(Map<String, dynamic> row, Map<String, ProductData> productLookup) {
     final productId = row['productId']?.toString() ?? '';
     final product = productLookup[productId];
@@ -311,15 +294,15 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
       name: row['itemName']?.toString() ?? (product?.displayName ?? 'Item'),
       icon: product?.icon ?? Icons.inventory_2_outlined,
       iconColor: product?.iconColor ?? DashboardConstants.brandBlue,
-      rateType: 'MRP', // sale_order_items has no rateType column server-side
+      rateType: 'MRP',
       rate: (row['rate'] as num?)?.toDouble() ?? 0,
       qty: (row['qty'] as num?)?.toInt() ?? 0,
       freeQty: (row['freeQty'] as num?)?.toInt() ?? 0,
-      unitId: '', // AliaseSalesDetails has no UnitID column, unlike BillingDetails
+      unitId: '',
       discountType: DiscountType.percent,
       discountValue: (row['discountPercent'] as num?)?.toDouble() ?? 0,
       taxPercent: taxPercent,
-      taxMode: 'INCLUDE', // orders don't currently carry a per-order tax-mode flag
+      taxMode: 'INCLUDE',
     );
   }
 
@@ -412,15 +395,30 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
           ? (widget.orderToEdit!['suitAppsId'] as String)
           : nextSuitAppsId();
 
-      // IMPORTANT: CustomerID sent to the server must be the customer's
-      // real numeric database id (matches AliaseSales.CustomerID FK), NOT
-      // their display code. Try the likely numeric-id keys FIRST; only
-      // fall back to AccountCode/Code as a last resort (which will send
-      // the wrong value to the server if hit — if you see CustomerID
-      // sync issues again, the actual key name needs to be confirmed
-      // here).
+      // FIX: CustomerID sent to the server must be the customer's real
+      // numeric database id — dbo.Accout.AccountID (matches
+      // AliaseSales.CustomerID FK) — NOT their display code.
+      // 'AccountID' / 'AccountId' are checked FIRST since that's the
+      // actual key name the customer map carries (it comes straight off
+      // dbo.Accout via GetCustomerDetails / GetDistributors / etc., whose
+      // SELECT list starts with "AccountID, AccountCode, ..."). Previously
+      // 'AccountID' wasn't in this list at all, so _readValue always fell
+      // through every numeric-id guess and landed on 'AccountCode' /
+      // 'Code' instead, silently saving the CODE as CustomerID.
+      // 'AccountCode' / 'Code' are kept ONLY as a last-resort fallback for
+      // any older caller that might still pass just a code with no id.
       final customerId = _readValue(
-        ['CustomerId', 'customerId', 'CustomerID', 'Id', 'id', 'AccountCode', 'Code'],
+        [
+          'AccountID',
+          'AccountId',
+          'CustomerId',
+          'customerId',
+          'CustomerID',
+          'Id',
+          'id',
+          'AccountCode',
+          'Code',
+        ],
       );
       final customerName = _readValue(['AccountName', 'Name']);
       final advanceAmount = double.tryParse(_advanceAmountController.text) ?? 0;
@@ -432,9 +430,6 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
           ? (widget.orderToEdit!['orderDate']?.toString() ?? now.toIso8601String())
           : now.toIso8601String();
 
-      // Order series / order number, kept as two SEPARATE values.
-      // - New order: series = _orderSeries, number = parsed _orderBillNo
-      // - Edit: reuse whatever was already stored on the row
       final orderSeries = _isEditing
           ? (widget.orderToEdit!['orderSeries']?.toString() ?? '')
           : _orderSeries;
@@ -445,14 +440,8 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
       final localOrder = {
         'suitAppsId': suitAppsId,
         'serverOrderId': _isEditing ? widget.orderToEdit!['serverOrderId'] : null,
-        // Separate columns now — see DatabaseHelper TODO in the class doc
-        // comment at the top of this file. `orderSeries` is TEXT (e.g.
-        // "B2C"), `orderNumber` is an INTEGER (e.g. 11).
         'orderSeries': orderSeries,
         'orderNumber': orderNumber,
-        // Legacy combined display string kept alongside, in case any
-        // other screen (e.g. bill printing) still reads `orderNo` as one
-        // "series-number" string. Safe to drop once nothing depends on it.
         'orderNo': _displayOrderNo,
         'orderDate': orderDate,
         'customerId': customerId,
@@ -460,22 +449,13 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
         'customerSuitAppsId': _readValue(['CustomerSuitAppsId'], fallback: ''),
         'userId': userId,
         'companyId': companyId,
-        // Now the FINAL amount (tax included), same as totalAmount —
-        // previously this was fed `_subTotal` (pre-tax), which is why it
-        // showed a stripped-down value instead of the real final total.
         'amount': _totalAmount,
         'advanceAmount': advanceAmount,
         'totalAmount': _totalAmount,
         'orderStatus': _orderStatus,
+        'status': _orderTypeStatus,
         'discount': _totalDiscount,
         'discountRate': '',
-        // Bill_Series / BillNo now mirror the order's own series/number
-        // (orderSeries/orderNumber) at save time, for BOTH new orders and
-        // edits — per team decision, populated immediately rather than
-        // waiting for a separate "convert order to bill" flow.
-        // AliasBillNo uses the "userId-sequenceNumber" pattern (e.g.
-        // "3-4"), matching the UID+'-'+NO pattern Sync_AliasDirectSales
-        // itself uses when generating OrderNo server-side.
         'billSeries': orderSeries,
         'billNo': orderNumber.toString(),
         'aliasBillNo': '$userId-$orderNumber',
@@ -485,7 +465,6 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
         'narration': _narrationController.text,
         'createdBy': userId,
         'createdDate': createdDate,
-        // Always 0 — see DatabaseHelper._createSaleOrderTables comments.
         'modifiedBy': 0,
         'modifiedDate': now.toIso8601String(),
         'deletedBy': 0,
@@ -496,6 +475,10 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
 
       final localItems = _orderItems.map((item) {
         final itemSuitAppsId = nextSuitAppsId();
+
+        final halfTaxPercent = item.taxPercent / 2;
+        final halfTaxAmount = item.taxAmount / 2;
+
         return {
           'suitAppsId': itemSuitAppsId,
           'productId': item.productId,
@@ -506,30 +489,22 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
           'mrp': item.rate,
           'grossValue': item.taxableAmount,
           'netAmount': item.netAmount,
-          // Combined tax kept as-is locally; CGST/SGST split happens only
-          // at sync-payload time (see SaleOrderSyncService).
           'taxRate': item.taxPercent.toString(),
           'taxAmount': item.taxAmount,
-          'cgstRate': null,
-          'cgstAmount': null,
-          'sgstRate': null,
-          'sgstAmount': null,
-          'fCessRate': null,
-          'fCessAmount': null,
+          'cgstRate': halfTaxPercent.toString(),
+          'cgstAmount': halfTaxAmount,
+          'sgstRate': halfTaxPercent.toString(),
+          'sgstAmount': halfTaxAmount,
+          'fCessRate': '0',
+          'fCessAmount': 0.0,
           'discountPercent': item.discountPercentDisplay,
           'discountAmount': item.discountAmount,
           'isSynced': 0,
         };
       }).toList();
 
-      // REPLACEs on the unique suitAppsId + deletes/reinserts items —
-      // acts as an update when editing, same trick as insertBillWithItems.
       await DatabaseHelper.instance.insertSaleOrderWithItems(localOrder, localItems);
 
-      // Reserve this order number immediately, unconditionally — but ONLY
-      // for a brand-new order. An edit reuses its original number and
-      // must never bump the counter (that would let a later new order
-      // accidentally skip/collide with numbers).
       if (!_isEditing) {
         await _bumpGreatestOrderBillNo(int.tryParse(_orderBillNo) ?? 0);
       }
@@ -589,6 +564,7 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final typeLabel = _resolvedIsPrimary ? 'Primary Order' : 'Secondary Sales';
     return AppBar(
       backgroundColor: DashboardConstants.brandBlue,
       elevation: 0,
@@ -600,15 +576,18 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Sale Order', style: DsFonts.pageTitle),
-          Text(_isEditing ? 'Update Order' : 'Create New Order', style: DsFonts.pageSubtitle),
+          Text(
+            _isEditing ? 'Update $typeLabel' : 'Create New $typeLabel',
+            style: DsFonts.pageSubtitle,
+          ),
         ],
       ),
     );
   }
 
   Widget _buildCustomerCard() {
-    final name = _readValue(['AccountName', 'Name'], fallback: 'ABC STORES');
-    final code = _readValue(['AccountCode', 'CustomerID', 'Code'], fallback: 'C000125');
+    final name = _readValue(['AccountName', 'Name'], fallback: '');
+    final code = _readValue(['AccountCode', 'CustomerID', 'Code'], fallback: '');
 
     return Container(
       padding: const EdgeInsets.all(DsSpacing.md),
@@ -649,6 +628,23 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
                         child: Text('B2B', style: DsFonts.caption.copyWith(color: DashboardConstants.brandBlue, fontWeight: FontWeight.w700, fontSize: 10)),
                       ),
                     ],
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: (_resolvedIsPrimary ? DashboardConstants.brandBlue : DsColors.error)
+                            .withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        _resolvedIsPrimary ? 'Primary' : 'Secondary',
+                        style: DsFonts.caption.copyWith(
+                          color: _resolvedIsPrimary ? DashboardConstants.brandBlue : DsColors.error,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -852,20 +848,6 @@ class _SaleOrderPageState extends State<SaleOrderPage> {
             fillColor: DsColors.cardBg,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(DsRadius.button)),
           ),
-        ),
-        const SizedBox(height: DsSpacing.sm),
-        DropdownButtonFormField<double>(
-          initialValue: _orderStatus,
-          decoration: InputDecoration(
-            labelText: 'Order Status',
-            filled: true,
-            fillColor: DsColors.cardBg,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(DsRadius.button)),
-          ),
-          items: _orderStatusOptions
-              .map((o) => DropdownMenuItem(value: o.value, child: Text(o.label)))
-              .toList(),
-          onChanged: (value) => setState(() => _orderStatus = value ?? 0),
         ),
       ],
     );

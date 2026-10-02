@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:suitapps/features/Reports/Distributor/DistributorListPage.dart';
 import 'package:suitapps/features/customer/presentation/pages/customer_list_page.dart';
 import 'package:suitapps/shared/extensions/responsive.dart';
 import 'package:suitapps/features/auth/presentation/pages/profile_page.dart';
@@ -27,7 +28,8 @@ class AppDrawer extends StatelessWidget {
 
     // UserID may have been stored as an int or a string depending on where
     // it was written, so accept either.
-    final userId = prefs.getInt('UserID') ??
+    final userId =
+        prefs.getInt('UserID') ??
         int.tryParse(prefs.getString('UserID') ?? '') ??
         0;
 
@@ -151,8 +153,7 @@ class AppDrawer extends StatelessWidget {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CustomerListPage(),
+                                    builder: (_) => const CustomerListPage(),
                                   ),
                                 );
                               },
@@ -230,11 +231,30 @@ class AppDrawer extends StatelessWidget {
                           title: "Orders",
                           onTap: () => Navigator.pop(context),
                         ),
-                        _drawerItem(
-                          context,
-                          icon: Icons.bar_chart_rounded,
-                          title: "Reports",
-                          onTap: () => Navigator.pop(context),
+                        ExpansionTile(
+                          leading: const Icon(
+                            Icons.bar_chart_rounded,
+                            color: Colors.black87,
+                          ),
+                          title: const Text("Reports"),
+                          children: [
+                            ListTile(
+                              dense: true,
+                              leading: const Icon(
+                                Icons.local_shipping_outlined,
+                              ),
+                              title: const Text("Distributor Order Report"),
+                              onTap: () {
+                                Navigator.pop(context);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const DistributorListPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
                         _drawerItem(
                           context,

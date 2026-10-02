@@ -12,6 +12,7 @@ import 'package:suitapps/core/database/session_storage.dart';
 import 'package:suitapps/features/auth/data/repositories/auth_session_repository.dart';
 import 'package:suitapps/features/auth/presentation/pages/forgot_password_page.dart';
 import 'package:suitapps/features/auth/presentation/pages/dashboard_page.dart';
+import 'package:suitapps/features/auth/presentation/pages/role_dashboard_page.dart';
 import 'package:suitapps/shared/extensions/responsive.dart';
 import 'package:suitapps/features/auth/presentation/pages/attendance_page.dart';
 import 'package:suitapps/core/config/api_config.dart';
@@ -29,8 +30,8 @@ class CompanyItem {
   final String id;
   final String name;
   final String address;
-  final String tinNo;       // GSTIN, printed on the invoice
-  final String mobileNo;    // matches JSON's "MobileNO"
+  final String tinNo; // GSTIN, printed on the invoice
+  final String mobileNo; // matches JSON's "MobileNO"
   final String telephoneNo;
   final String companyCode;
 
@@ -78,7 +79,7 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     _fetchCompanies();
-      _checkMidnightLogout();
+    _checkMidnightLogout();
   }
 
   @override
@@ -107,40 +108,36 @@ class _LoginPageState extends State<LoginPage> {
     ).join();
     return 'sess_$suffix';
   }
+
   Future<void> _checkMidnightLogout() async {
-  final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
 
-  final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+    final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
 
-  if (!isLoggedIn) return;
+    if (!isLoggedIn) return;
 
-  final savedDate = prefs.getString('loginDate');
+    final savedDate = prefs.getString('loginDate');
 
-  if (savedDate == null) return;
+    if (savedDate == null) return;
 
-  final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-  // different day means session expired after 12 AM
-  if (savedDate != today) {
+    // different day means session expired after 12 AM
+    if (savedDate != today) {
+      await prefs.clear();
 
-    await prefs.clear();
+      if (!mounted) return;
 
-    if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Session expired. Please login again")),
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Session expired. Please login again"),
-      ),
-    );
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const LoginPage(),
-      ),
-    );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+      );
+    }
   }
-}
 
   // -----------------------------
   // âœ… API: COMPANIES
@@ -468,17 +465,47 @@ class _LoginPageState extends State<LoginPage> {
       await prefs.setInt('VanID', (data['VanID'] ?? 0) as int);
       await prefs.setString('B2CSeries', (data['B2CSeries'] ?? '').toString());
       await prefs.setString('B2BSeries', (data['B2BSeries'] ?? '').toString());
-      await prefs.setString('B2CReturnSeries',(data['B2CReturnSeries'] ?? '').toString(),);
-      await prefs.setString('B2BReturnSeries',(data['B2BReturnSeries'] ?? '').toString(),);
-      await prefs.setInt('GreatestB2CBillNo',(data['GreatestB2CBillNo'] ?? 0) as int,);
-      await prefs.setInt('GreatestB2BBillNo',(data['GreatestB2BBillNo'] ?? 0) as int,);
-      await prefs.setInt('GreatestB2CReturnBillNo',(data['GreatestB2CReturnBillNo'] ?? 0) as int,);
-      await prefs.setInt('GreatestB2BReturnBillNo',(data['GreatestB2BReturnBillNo'] ?? 0) as int,);
+      await prefs.setString(
+        'B2CReturnSeries',
+        (data['B2CReturnSeries'] ?? '').toString(),
+      );
+      await prefs.setString(
+        'B2BReturnSeries',
+        (data['B2BReturnSeries'] ?? '').toString(),
+      );
+      await prefs.setInt(
+        'GreatestB2CBillNo',
+        (data['GreatestB2CBillNo'] ?? 0) as int,
+      );
+      await prefs.setInt(
+        'GreatestB2BBillNo',
+        (data['GreatestB2BBillNo'] ?? 0) as int,
+      );
+      await prefs.setInt(
+        'GreatestB2CReturnBillNo',
+        (data['GreatestB2CReturnBillNo'] ?? 0) as int,
+      );
+      await prefs.setInt(
+        'GreatestB2BReturnBillNo',
+        (data['GreatestB2BReturnBillNo'] ?? 0) as int,
+      );
 
-      await prefs.setString('B2COrderSeries', (data['B2COrderSeries'] ?? '').toString());
-      await prefs.setString('B2BOrderSeries', (data['B2BOrderSeries'] ?? '').toString());
-      await prefs.setInt('GreatestB2COrderBillNo',(data['GreatestB2COrderBillNo'] ?? 0) as int,);
-      await prefs.setInt('GreatestB2BOrderBillNo',(data['GreatestB2BOrderBillNo'] ?? 0) as int,);
+      await prefs.setString(
+        'B2COrderSeries',
+        (data['B2COrderSeries'] ?? '').toString(),
+      );
+      await prefs.setString(
+        'B2BOrderSeries',
+        (data['B2BOrderSeries'] ?? '').toString(),
+      );
+      await prefs.setInt(
+        'GreatestB2COrderBillNo',
+        (data['GreatestB2COrderBillNo'] ?? 0) as int,
+      );
+      await prefs.setInt(
+        'GreatestB2BOrderBillNo',
+        (data['GreatestB2BOrderBillNo'] ?? 0) as int,
+      );
 
       print('Allocation saved. VanID = ${data['VanID']}');
     } catch (e) {
@@ -547,8 +574,10 @@ class _LoginPageState extends State<LoginPage> {
           (k) => k.toLowerCase().contains('year'),
         );
         if (yearLikeKeys.isEmpty) {
-          print("âš ï¸  No key containing 'year' found in login response â€” "
-              "FYearID is not being returned by the backend at all.");
+          print(
+            "âš ï¸  No key containing 'year' found in login response â€” "
+            "FYearID is not being returned by the backend at all.",
+          );
         } else {
           for (final k in yearLikeKeys) {
             print("Found year-like key: '$k' = ${decoded[k]}");
@@ -639,7 +668,8 @@ class _LoginPageState extends State<LoginPage> {
       // separate API call is needed here anymore. Tries a couple of
       // likely alternate key spellings too, in case the backend names
       // it differently than the proc's column alias.
-      final dynamic fYearRaw = decoded['FYearID'] ??
+      final dynamic fYearRaw =
+          decoded['FYearID'] ??
           decoded['FYearId'] ??
           decoded['FinancialYearID'] ??
           decoded['YearID'];
@@ -695,6 +725,13 @@ class _LoginPageState extends State<LoginPage> {
                 DashboardPage(userDecoded: decoded, sessionId: sessionId),
           ),
         );
+        // Navigator.pushReplacement(
+        //   context,
+        //   MaterialPageRoute(
+        //     builder: (_) =>
+        //         DashboardPage(userDecoded: decoded, sessionId: sessionId),
+        //   ),
+        // );
       } else {
         Navigator.pushReplacement(
           context,
